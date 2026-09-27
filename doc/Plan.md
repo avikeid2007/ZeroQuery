@@ -144,18 +144,78 @@ Document all three prominently in the OSS README/`.env.example` — self-hosters
 
 ## 6. Build Phases
 
-| Phase | Scope | Outcome |
-| --- | --- | --- |
-| **0. Contract design** | UI Spec schema + DAB config schema validation rules | Shared contracts for all downstream work |
-| **1. Introspection + Picker** | Connection string → schema read → table/column/description picker UI | User can select what to expose, nothing runs yet |
-| **2. Config Generator** | Picker output → valid `dab-config.json` | Config file produced and schema-validated |
-| **3. Process Manager** | Subprocess spawn/kill, port registry, idle timeout, health checks | A DAB MCP instance can be started, queried, and reaped on demand |
-| **4. Orchestration skeleton** | ASP.NET API, `ILlmProvider`, OpenRouter integration against a running instance | Prompt → real data → UI Spec, single-instance |
-| **5. Frontend** | Setup wizard + query view, component renderer, SSE streaming | Full user flow, one DB at a time |
-| **6. Security hardening** | Encryption at rest, egress restrictions, resource caps, rate limits | Safe for public community use |
-| **7. Persistence** | Saved connections, "reconnect" flow, "forget connection" action | Return visits don't require re-setup |
-| **8. Write access (full CRUD)** | Per-entity write permissions in picker UI, confirm-before-execute flow in the `form` UI Spec type, audit trail, write-specific rate limits | Create/update/delete supported, opt-in per table, with a human confirmation step before any write reaches the MCP server |
-| **9. Polish/OSS readiness** | README, docs, error states, deployment guide (Docker Compose for the whole stack) | Ready to publish/share |
+| Phase | Scope | Outcome | Status |
+| --- | --- | --- | --- |
+| **0. Contract design** | UI Spec schema + DAB config schema validation rules | Shared contracts for all downstream work | ✅ Done |
+| **1. Introspection + Picker** | Connection string → schema read → table/column/description picker UI | User can select what to expose, nothing runs yet | ✅ Done |
+| **2. Config Generator** | Picker output → valid `dab-config.json` | Config file produced and schema-validated | ✅ Done |
+| **3. Process Manager** | Subprocess spawn/kill, port registry, idle timeout, health checks | A DAB MCP instance can be started, queried, and reaped on demand | ✅ Done |
+| **4. Orchestration skeleton** | ASP.NET API, `ILlmProvider`, OpenRouter integration against a running instance | Prompt → real data → UI Spec, single-instance | ✅ Done |
+| **5. Frontend** | Setup wizard + query view, component renderer, SSE streaming | Full user flow, one DB at a time | ✅ Done |
+| **6. Security hardening** | Encryption at rest, egress restrictions, resource caps, rate limits | Safe for public community use | ⬜ Not started |
+| **7. Persistence** | Saved connections, "reconnect" flow, "forget connection" action | Return visits don't require re-setup | ⬜ Not started |
+| **8. Write access (full CRUD)** | Per-entity write permissions in picker UI, confirm-before-execute flow in the `form` UI Spec type, audit trail, write-specific rate limits | Create/update/delete supported, opt-in per table, with a human confirmation step before any write reaches the MCP server | ⬜ Not started |
+| **9. Polish/OSS readiness** | README, docs, error states, deployment guide (Docker Compose for the whole stack) | Ready to publish/share | 🟡 Partial (README exists; deployment guide/Docker Compose not yet written) |
+
+### 6.1 Detailed progress checklist
+
+Kept in sync with the actual codebase (see repo memory notes for exact files/tests) —
+check here first before assuming a phase is unfinished or re-doing completed work.
+
+**Phase 0 — Contract design** ✅
+- [x] UI Spec schema (`type/title/columns/rows/chartType/meta`) — `UiSpec.cs`
+- [x] DAB config JSON-schema validation wired against DAB's own published schema
+
+**Phase 1 — Introspection + Picker** ✅
+- [x] `POST /api/introspect` (SQL Server / PostgreSQL / MySQL)
+- [x] Table/column/description picker UI (`TablePicker.tsx`)
+
+**Phase 2 — Config Generator** ✅
+- [x] `POST /api/config/generate` → schema-validated `dab-config.json`
+- [x] Connection string kept out of the generated file (`@env('NAME')` only)
+- [x] Primary-key fallback fix for keyless views (composite-key-of-all-columns)
+
+**Phase 3 — Process Manager** ✅
+- [x] `dab start` subprocess spawn/kill + free-port allocation
+- [x] Status states (`Provisioning/Starting/Running/Idle/Stopped/Error`) + `GET /api/instances/{id}/status`
+- [x] Idle-timeout reaper + graceful shutdown on app stop
+- [x] Concurrency cap (429 when exceeded)
+
+**Phase 4 — Orchestration skeleton** ✅
+- [x] `McpClient` (real DAB MCP wire protocol) + `ILlmProvider`/`OpenRouterLlmProvider`
+- [x] Tool-calling loop with synthetic `render_result` tool → `UiSpec`
+- [x] `POST /api/instances/{id}/query` (blocking variant)
+- [x] Runtime-configurable LLM settings (UI panel + env vars), not just static config
+
+**Phase 5 — Frontend** ✅
+- [x] Setup wizard (Connect → Select → Launch) matching the approved mock design
+- [x] Query view renders Table/Chart/Card/Stat (Recharts for Chart)
+- [x] `POST /api/instances/{id}/query/stream` (SSE) + live progress UI
+- [x] Backend upgraded to .NET 10 to get native `TypedResults.ServerSentEvents`
+
+**Phase 6 — Security hardening** ⬜ *(next up)*
+- [ ] Encrypt connection strings at rest (currently held in plain memory / temp config files)
+- [ ] Block SSRF-style connections to internal/private IP ranges
+- [ ] Per-instance CPU/memory resource caps on `dab` subprocesses
+- [ ] Rate-limit queries + concurrent instances per user/IP
+- [ ] Run DAB subprocesses under a dedicated low-privilege OS account
+
+**Phase 7 — Persistence** ⬜
+- [ ] Saved connections (survive a backend restart — LLM settings and connection strings are currently in-memory only)
+- [ ] "Reconnect to [DB]?" explicit confirmation flow (no silent auto-reconnect)
+- [ ] "Forget this connection" action
+
+**Phase 8 — Write access (full CRUD)** ⬜
+- [ ] Per-entity, per-operation write permissions in the picker UI
+- [ ] `form` UI Spec type + confirm-before-execute flow
+- [ ] Audit trail for writes (who/what/when)
+- [ ] Write-specific (tighter) rate limits
+
+**Phase 9 — Polish / OSS readiness** 🟡
+- [x] README with setup/run instructions
+- [x] Repo memory / architecture notes kept current per phase
+- [ ] Dedicated deployment guide (Docker Compose for the whole stack: API + frontend + `dab`)
+- [ ] Broader error-state pass across the UI (beyond what each phase already covers)
 
 ---
 
