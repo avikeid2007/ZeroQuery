@@ -215,7 +215,14 @@ check here first before assuming a phase is unfinished or re-doing completed wor
 - [x] Dedicated write audit trail (`IWriteAuditStore` / `FileWriteAuditStore`, `audit-log.json`, `GET /api/audit`, `AuditLogModal.tsx`)
 - [x] Write-specific (tighter) rate limits (`mutations` policy, default 5 mutations/min per IP via `RATE_LIMIT_MUTATIONS_PER_MINUTE`)
 
-**Phase 9 — Polish / OSS readiness** 🟡 *(next up)*
+**Phase 9 — Polish / OSS readiness** ✅
+- [x] MIT License file (`LICENSE`) matching DAB's permissive license
+- [x] Open-source contributing guidelines (`CONTRIBUTING.md`) with branching strategy, coding standards, and PR checklist
+- [x] Comprehensive environment template (`.env.example`) documenting all runtime, persistence, and security settings
+- [x] Containerization: multi-stage `backend/Dockerfile` (with DAB CLI tool pre-installed), `frontend/Dockerfile` (Next.js runner), and `docker-compose.yml` (single-command setup)
+- [x] UX polish: Empty state for databases with 0 discovered tables, helpful LLM API key hints in query view
+- [x] Documentation: Docker quickstart, recommended OpenRouter models table, security and architecture breakdown in `README.md`
+- [x] Full build & test suite verification (129 backend tests and Next.js production build)
 
 ---
 

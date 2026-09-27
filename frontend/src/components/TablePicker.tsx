@@ -102,19 +102,29 @@ export default function TablePicker({ schema, onBack, onConfirm }: TablePickerPr
         </p>
       </div>
 
-      <table className="w-full min-w-[36rem] border-collapse text-sm">
-        <thead>
-          <tr>
-            <th className="w-6 border-b border-border px-2.5 py-2"></th>
-            <th className="border-b border-border px-2.5 py-2 text-left text-xs font-medium text-muted">table</th>
-            <th className="border-b border-border px-2.5 py-2 text-left text-xs font-medium text-muted">permissions</th>
-            <th className="border-b border-border px-2.5 py-2 text-left text-xs font-medium text-muted">
-              description agents will use
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {schema.tables.map((table) => {
+      {schema.tables.length === 0 ? (
+        <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-border py-12 px-6 text-center">
+          <div className="text-3xl">🔍</div>
+          <h3 className="text-base font-semibold text-text">No tables or views found</h3>
+          <p className="max-w-md text-xs text-muted">
+            The database connected successfully, but no tables or views were visible.
+            Ensure your database user has <code className="font-mono text-text">SELECT</code> permissions on <code className="font-mono text-text">INFORMATION_SCHEMA</code> or that the target database contains tables.
+          </p>
+        </div>
+      ) : (
+        <table className="w-full min-w-[36rem] border-collapse text-sm">
+          <thead>
+            <tr>
+              <th className="w-6 border-b border-border px-2.5 py-2"></th>
+              <th className="border-b border-border px-2.5 py-2 text-left text-xs font-medium text-muted">table</th>
+              <th className="border-b border-border px-2.5 py-2 text-left text-xs font-medium text-muted">permissions</th>
+              <th className="border-b border-border px-2.5 py-2 text-left text-xs font-medium text-muted">
+                description agents will use
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {schema.tables.map((table) => {
             const key = qualifiedTableName(table);
             const tableSelection = selection[key];
             const isExpanded = !!expanded[key];
@@ -252,6 +262,7 @@ export default function TablePicker({ schema, onBack, onConfirm }: TablePickerPr
           })}
         </tbody>
       </table>
+      )}
 
       {schema.foreignKeys.length > 0 && (
         <details className="rounded-md border border-border p-3 text-sm">

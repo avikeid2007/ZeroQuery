@@ -140,8 +140,13 @@ export default function QueryView({ instanceId }: QueryViewProps) {
           </div>
         )}
         {errorMessage && (
-          <div className="rounded-md border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger">
-            {errorMessage}
+          <div className="flex flex-col gap-1.5 rounded-md border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger">
+            <span>{errorMessage}</span>
+            {errorMessage.toLowerCase().includes("api key") && (
+              <span className="text-xs text-muted">
+                Tip: Enter your OpenRouter API key in the <strong>LLM settings</strong> bar at the top of the page, or set the <code className="font-mono text-text">OPENROUTER_API_KEY</code> environment variable.
+              </span>
+            )}
           </div>
         )}
 

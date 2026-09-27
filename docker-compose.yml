@@ -1,0 +1,32 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      - "5000:5000"
+      - "6000-6050:6000-6050"
+    environment:
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - LLM_MODEL_ID=${LLM_MODEL_ID:-nvidia/nemotron-3-ultra-550b-a55b:free}
+      - MCP_PERSISTENCE_MODE=${MCP_PERSISTENCE_MODE:-save}
+      - MCP_PERSISTENCE_DIR=/data
+      - MCP_BLOCK_PRIVATE_NETWORKS=${MCP_BLOCK_PRIVATE_NETWORKS:-false}
+    volumes:
+      - zeroquery_data:/data
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:5000}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  zeroquery_data:
