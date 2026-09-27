@@ -32,6 +32,9 @@ public sealed class DabInstance
     /// <summary>Last stderr line captured, surfaced to the user when <see cref="Status"/> is <see cref="DabInstanceStatus.Error"/>.</summary>
     public string? LastError { get; set; }
 
+    /// <summary>Client IP address that created this instance (for abuse control / per-IP concurrency caps).</summary>
+    public string? ClientIp { get; init; }
+
     /// <summary>Base URL of the running instance, e.g. "http://localhost:5551".</summary>
     public string BaseUrl => $"http://localhost:{Port}";
 }

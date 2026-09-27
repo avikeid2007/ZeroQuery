@@ -320,4 +320,82 @@ public class OrchestrationServiceTests
         Assert.Equal(UiSpecType.Stat, result.Type);
         Assert.Equal("Count", result.Title);
     }
+
+    [Fact]
+    public async Task RunQueryAsync_ParsesFormUiSpec_WhenModelProposesMutation()
+    {
+        var mcpClient = new FakeMcpClient(SampleTools, new());
+        var llmProvider = new FakeLlmProvider(new[]
+        {
+            new LlmCompletion(null, new[]
+            {
+                new LlmToolCall(
+                    "call-1",
+                    "render_result",
+                    """
+                    {
+                      "type": "form",
+                      "title": "Update Chai Price",
+                      "columns": [],
+                      "rows": [],
+                      "meta": { "sourceEntity": "Products" },
+                      "form": {
+                        "operation": "update",
+                        "entity": "Products",
+                        "primaryKey": { "ProductID": 1 },
+                        "fields": [
+                          { "name": "ProductID", "label": "Product ID", "currentValue": 1, "proposedValue": 1, "isPrimaryKey": true },
+                          { "name": "UnitPrice", "label": "Price", "currentValue": 18.0, "proposedValue": 19.99 }
+                        ]
+                      }
+                    }
+                    """)
+            })
+        });
+
+        var service = CreateService(llmProvider, mcpClient);
+        var result = await service.RunQueryAsync("http://localhost:9999", "change price of Chai to 19.99");
+
+        Assert.Equal(UiSpecType.Form, result.Type);
+        Assert.NotNull(result.Form);
+        Assert.Equal("update", result.Form.Operation);
+        Assert.Equal("Products", result.Form.Entity);
+        Assert.Equal(2, result.Form.Fields.Count);
+        Assert.Equal("UnitPrice", result.Form.Fields[1].Name);
+        Assert.Equal(19.99, result.Form.Fields[1].ProposedValue);
+    }
+
+    [Fact]
+    public async Task RunQueryAsync_FiltersOutMutationToolsFromLlm()
+    {
+        var tools = new[]
+        {
+            new McpTool("read_records", "Reads records", null),
+            new McpTool("create_record", "Creates records", null),
+            new McpTool("update_record", "Updates records", null),
+            new McpTool("delete_record", "Deletes records", null),
+            new McpTool("describe_entities", "Describes entities", null)
+        };
+
+        var mcpClient = new FakeMcpClient(tools, new());
+        var llmProvider = new FakeLlmProvider(new[]
+        {
+            new LlmCompletion(null, new[]
+            {
+                new LlmToolCall("call-1", "render_result", """{"type":"stat","title":"Test","columns":[],"rows":[],"meta":{"sourceEntity":""}}""")
+            })
+        });
+
+        var service = CreateService(llmProvider, mcpClient);
+        await service.RunQueryAsync("http://localhost:9999", "test query");
+
+        var toolsPassedToLlm = llmProvider.LastTools;
+        Assert.NotNull(toolsPassedToLlm);
+        Assert.Contains(toolsPassedToLlm, t => t.Name == "read_records");
+        Assert.Contains(toolsPassedToLlm, t => t.Name == "describe_entities");
+        Assert.Contains(toolsPassedToLlm, t => t.Name == "render_result");
+        Assert.DoesNotContain(toolsPassedToLlm, t => t.Name == "create_record");
+        Assert.DoesNotContain(toolsPassedToLlm, t => t.Name == "update_record");
+        Assert.DoesNotContain(toolsPassedToLlm, t => t.Name == "delete_record");
+    }
 }

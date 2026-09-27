@@ -103,13 +103,25 @@ export interface InstanceStatusResponse {
   lastError: string | null;
 }
 
+export interface DabStatusInfo {
+  isInstalled: boolean;
+  version: string | null;
+  executablePath: string;
+  error: string | null;
+}
+
+export interface DabInstallResult {
+  success: boolean;
+  message: string;
+}
+
 // Mirrors backend/Zeroquery.Api/Query/QueryDtos.cs
 
 export interface QueryRequest {
   prompt: string;
 }
 
-export type UiSpecTypeName = "Table" | "Chart" | "Card" | "Stat";
+export type UiSpecTypeName = "Table" | "Chart" | "Card" | "Stat" | "Form";
 export type UiSpecChartTypeName = "Bar" | "Line" | "Pie";
 
 export interface UiSpecColumnDto {
@@ -122,6 +134,21 @@ export interface UiSpecMetaDto {
   generatedAt: string;
 }
 
+export interface UiSpecFormFieldDto {
+  name: string;
+  label: string;
+  currentValue?: unknown;
+  proposedValue?: unknown;
+  isPrimaryKey?: boolean;
+}
+
+export interface UiSpecFormDto {
+  operation: "create" | "update" | "delete";
+  entity: string;
+  primaryKey?: Record<string, unknown> | null;
+  fields: UiSpecFormFieldDto[];
+}
+
 export interface UiSpecResponse {
   type: UiSpecTypeName;
   title: string;
@@ -129,6 +156,7 @@ export interface UiSpecResponse {
   rows: Record<string, unknown>[];
   chartType: UiSpecChartTypeName | null;
   meta: UiSpecMetaDto;
+  form?: UiSpecFormDto | null;
 }
 
 /**
@@ -153,4 +181,62 @@ export interface LlmSettingsResponse {
 export interface UpdateLlmSettingsRequest {
   apiKey: string | null;
   modelId: string | null;
+}
+
+// Mirrors backend/Zeroquery.Api/Connections/ConnectionDtos.cs (Phase 7)
+
+export interface SavedConnectionSummary {
+  id: string;
+  name: string;
+  provider: DatabaseProvider;
+  createdAt: string;
+  lastConnectedAt: string | null;
+}
+
+export interface SavedConnectionDetail {
+  id: string;
+  name: string;
+  provider: DatabaseProvider;
+  connectionStringEnvVarName: string;
+  configJson: string;
+  createdAt: string;
+  lastConnectedAt: string | null;
+}
+
+export interface SaveConnectionRequest {
+  name?: string;
+  provider: DatabaseProvider;
+  connectionString: string;
+  configJson: string;
+  connectionStringEnvVarName: string;
+}
+
+// Phase 8: Write access (Full CRUD) & Audit types
+
+export interface ExecuteMutationRequest {
+  entity: string;
+  operation: "create" | "update" | "delete";
+  primaryKey?: Record<string, unknown> | null;
+  previousValues?: Record<string, unknown> | null;
+  values: Record<string, unknown>;
+}
+
+export interface ExecuteMutationResponse {
+  success: boolean;
+  message: string;
+  record?: Record<string, unknown> | null;
+}
+
+export interface WriteAuditEntry {
+  id: string;
+  timestamp: string;
+  clientIp: string;
+  instanceId: string;
+  entity: string;
+  operation: string;
+  primaryKey?: Record<string, unknown> | null;
+  previousValues?: Record<string, unknown> | null;
+  newValues?: Record<string, unknown> | null;
+  success: boolean;
+  errorMessage?: string | null;
 }

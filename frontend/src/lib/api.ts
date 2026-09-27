@@ -11,6 +11,14 @@ import type {
   OrchestrationProgressDto,
   LlmSettingsResponse,
   UpdateLlmSettingsRequest,
+  SavedConnectionSummary,
+  SavedConnectionDetail,
+  SaveConnectionRequest,
+  ExecuteMutationRequest,
+  ExecuteMutationResponse,
+  WriteAuditEntry,
+  DabStatusInfo,
+  DabInstallResult,
 } from "./types";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5000";
@@ -100,6 +108,27 @@ export async function stopDabInstance(id: string): Promise<void> {
   if (!response.ok && response.status !== 404) {
     throw new ApiError(await parseErrorMessage(response, `Stopping the instance failed with status ${response.status}.`));
   }
+}
+
+/** Calls GET /api/instances/dab-status to check if the DAB CLI is installed. */
+export async function getDabStatus(): Promise<DabStatusInfo> {
+  const response = await fetch(`${API_BASE_URL}/api/instances/dab-status`);
+  if (!response.ok) {
+    throw new ApiError(await parseErrorMessage(response, `Failed to check DAB status: ${response.status}`));
+  }
+  return (await response.json()) as DabStatusInfo;
+}
+
+/** Calls POST /api/instances/install-dab to install Microsoft.DataApiBuilder globally. */
+export async function installDab(): Promise<DabInstallResult> {
+  const response = await fetch(`${API_BASE_URL}/api/instances/install-dab`, {
+    method: "POST",
+  });
+  if (!response.ok) {
+    const message = await parseErrorMessage(response, `Installation failed with status ${response.status}`);
+    throw new ApiError(message);
+  }
+  return (await response.json()) as DabInstallResult;
 }
 
 /**
@@ -217,8 +246,7 @@ export async function getLlmSettings(): Promise<LlmSettingsResponse> {
 
 /**
  * Calls PUT /api/settings/llm to update the LLM provider settings (API key and/or model id)
- * for the running backend instance. Settings apply immediately but are in-memory only — they
- * don't persist across a backend restart.
+ * for the running backend instance.
  */
 export async function updateLlmSettings(request: UpdateLlmSettingsRequest): Promise<LlmSettingsResponse> {
   const response = await fetch(`${API_BASE_URL}/api/settings/llm`, {
@@ -232,4 +260,91 @@ export async function updateLlmSettings(request: UpdateLlmSettingsRequest): Prom
   }
 
   return (await response.json()) as LlmSettingsResponse;
+}
+
+// Phase 7: Saved connection management
+
+export async function getSavedConnections(): Promise<SavedConnectionSummary[]> {
+  const response = await fetch(`${API_BASE_URL}/api/connections`);
+  if (!response.ok) {
+    throw new ApiError(await parseErrorMessage(response, `Failed to load saved connections.`));
+  }
+  return (await response.json()) as SavedConnectionSummary[];
+}
+
+export async function getSavedConnectionById(id: string): Promise<SavedConnectionDetail> {
+  const response = await fetch(`${API_BASE_URL}/api/connections/${id}`);
+  if (!response.ok) {
+    throw new ApiError(await parseErrorMessage(response, `Failed to fetch connection details.`));
+  }
+  return (await response.json()) as SavedConnectionDetail;
+}
+
+export async function saveConnection(request: SaveConnectionRequest): Promise<SavedConnectionSummary> {
+  const response = await fetch(`${API_BASE_URL}/api/connections`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+
+  if (!response.ok) {
+    throw new ApiError(await parseErrorMessage(response, `Failed to save connection.`));
+  }
+
+  return (await response.json()) as SavedConnectionSummary;
+}
+
+export async function reconnectSavedConnection(id: string): Promise<InstanceStatusResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/connections/${id}/connect`, {
+    method: "POST",
+  });
+
+  if (!response.ok) {
+    throw new ApiError(await parseErrorMessage(response, `Reconnecting failed with status ${response.status}.`));
+  }
+
+  return (await response.json()) as InstanceStatusResponse;
+}
+
+export async function deleteSavedConnection(id: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/api/connections/${id}`, {
+    method: "DELETE",
+  });
+
+  if (!response.ok && response.status !== 404) {
+    throw new ApiError(await parseErrorMessage(response, `Failed to forget connection.`));
+  }
+}
+
+export async function executeMutation(
+  instanceId: string,
+  request: ExecuteMutationRequest
+): Promise<ExecuteMutationResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/instances/${instanceId}/mutate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+
+  if (!response.ok) {
+    throw new ApiError(await parseErrorMessage(response, `Mutation failed with status ${response.status}.`));
+  }
+
+  return (await response.json()) as ExecuteMutationResponse;
+}
+
+export async function getAuditLogs(
+  limit: number = 50,
+  entity?: string
+): Promise<WriteAuditEntry[]> {
+  const params = new URLSearchParams();
+  params.set("limit", limit.toString());
+  if (entity) params.set("entity", entity);
+
+  const response = await fetch(`${API_BASE_URL}/api/audit?${params.toString()}`);
+  if (!response.ok) {
+    throw new ApiError(await parseErrorMessage(response, `Failed to fetch audit logs.`));
+  }
+
+  return (await response.json()) as WriteAuditEntry[];
 }

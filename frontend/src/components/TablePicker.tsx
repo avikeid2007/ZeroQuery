@@ -67,6 +67,23 @@ export default function TablePicker({ schema, onBack, onConfirm }: TablePickerPr
     });
   }
 
+  function toggleWriteAction(key: string, action: "create" | "update" | "delete") {
+    setSelection((prev) => {
+      const table = prev[key];
+      const current = table.writeActions ?? { create: false, update: false, delete: false };
+      return {
+        ...prev,
+        [key]: {
+          ...table,
+          writeActions: {
+            ...current,
+            [action]: !current[action],
+          },
+        },
+      };
+    });
+  }
+
   function toggleExpanded(key: string) {
     setExpanded((prev) => ({ ...prev, [key]: !prev[key] }));
   }
@@ -80,7 +97,8 @@ export default function TablePicker({ schema, onBack, onConfirm }: TablePickerPr
         <p className="mt-1 text-sm text-muted">
           Pick the tables/views and columns Zeroquery can query. Descriptions you add here
           directly improve how well the AI picks the right table/column later — worth filling in.
-          All tables default to <span className="font-medium text-text">read-only</span>.
+          All tables default to <span className="font-medium text-text">read-only</span>; you can
+          opt into <span className="font-medium text-text">Create, Update, or Delete</span> permissions per table.
         </p>
       </div>
 
@@ -89,6 +107,7 @@ export default function TablePicker({ schema, onBack, onConfirm }: TablePickerPr
           <tr>
             <th className="w-6 border-b border-border px-2.5 py-2"></th>
             <th className="border-b border-border px-2.5 py-2 text-left text-xs font-medium text-muted">table</th>
+            <th className="border-b border-border px-2.5 py-2 text-left text-xs font-medium text-muted">permissions</th>
             <th className="border-b border-border px-2.5 py-2 text-left text-xs font-medium text-muted">
               description agents will use
             </th>
@@ -99,6 +118,8 @@ export default function TablePicker({ schema, onBack, onConfirm }: TablePickerPr
             const key = qualifiedTableName(table);
             const tableSelection = selection[key];
             const isExpanded = !!expanded[key];
+            const hasPrimaryKey = table.columns.some((c) => c.isPrimaryKey);
+            const canMutate = !table.isView && hasPrimaryKey;
 
             return (
               <Fragment key={key}>
@@ -133,6 +154,50 @@ export default function TablePicker({ schema, onBack, onConfirm }: TablePickerPr
                   </td>
                   <td className="px-2.5 py-2.5">
                     {tableSelection.selected ? (
+                      canMutate ? (
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="rounded bg-teal/10 px-1.5 py-0.5 text-xs font-medium text-teal" title="Read is always granted">
+                            Read
+                          </span>
+                          <label className="flex items-center gap-1 text-xs text-text cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={tableSelection.writeActions?.create ?? false}
+                              onChange={() => toggleWriteAction(key, "create")}
+                              className="h-3.5 w-3.5 accent-teal"
+                            />
+                            Create
+                          </label>
+                          <label className="flex items-center gap-1 text-xs text-text cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={tableSelection.writeActions?.update ?? false}
+                              onChange={() => toggleWriteAction(key, "update")}
+                              className="h-3.5 w-3.5 accent-teal"
+                            />
+                            Update
+                          </label>
+                          <label className="flex items-center gap-1 text-xs text-text cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={tableSelection.writeActions?.delete ?? false}
+                              onChange={() => toggleWriteAction(key, "delete")}
+                              className="h-3.5 w-3.5 accent-teal"
+                            />
+                            Delete
+                          </label>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-muted" title={table.isView ? "Views cannot be modified" : "Primary key required for mutation"}>
+                          Read-only {table.isView ? "(view)" : "(no PK)"}
+                        </span>
+                      )
+                    ) : (
+                      <span className="text-xs text-muted">—</span>
+                    )}
+                  </td>
+                  <td className="px-2.5 py-2.5">
+                    {tableSelection.selected ? (
                       <input
                         type="text"
                         value={tableSelection.description}
@@ -148,7 +213,7 @@ export default function TablePicker({ schema, onBack, onConfirm }: TablePickerPr
                 {isExpanded && (
                   <tr className="border-b border-border">
                     <td></td>
-                    <td colSpan={2} className="px-2.5 py-2">
+                    <td colSpan={3} className="px-2.5 py-2">
                       <div className="flex flex-col gap-1.5 border-l border-border pl-3">
                         {table.columns.map((column) => {
                           const columnSelection = tableSelection.columns[column.name];

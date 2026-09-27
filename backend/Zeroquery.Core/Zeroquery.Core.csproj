@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <PackageReference Include="JsonSchema.Net" Version="9.4.0" />
+    <PackageReference Include="Microsoft.AspNetCore.DataProtection.Abstractions" Version="10.0.12" />
     <PackageReference Include="Microsoft.Data.SqlClient" Version="7.1.0" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.0" />
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.0" />

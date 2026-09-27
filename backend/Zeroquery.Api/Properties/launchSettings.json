@@ -1,4 +1,4 @@
-﻿{
+{
   "$schema": "https://json.schemastore.org/launchsettings.json",
   "profiles": {
     "http": {
@@ -7,7 +7,8 @@
       "launchBrowser": false,
       "applicationUrl": "http://localhost:5000",
       "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development"
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "MCP_BLOCK_PRIVATE_NETWORKS": "false"
       }
     },
     "https": {
@@ -16,7 +17,8 @@
       "launchBrowser": false,
       "applicationUrl": "https://localhost:7157;http://localhost:5000",
       "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development"
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "MCP_BLOCK_PRIVATE_NETWORKS": "false"
       }
     }
   }

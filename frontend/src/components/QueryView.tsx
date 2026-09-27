@@ -19,6 +19,8 @@ import {
 import type { PieLabelRenderProps } from "recharts";
 import type { OrchestrationProgressDto, UiSpecResponse } from "@/lib/types";
 import { queryDabInstanceStream, ApiError } from "@/lib/api";
+import FormView from "./FormView";
+import AuditLogModal from "./AuditLogModal";
 
 interface QueryViewProps {
   instanceId: string;
@@ -61,6 +63,7 @@ export default function QueryView({ instanceId }: QueryViewProps) {
   const [progress, setProgress] = useState<OrchestrationProgressDto | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [result, setResult] = useState<UiSpecResponse | null>(null);
+  const [isAuditOpen, setIsAuditOpen] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -100,14 +103,14 @@ export default function QueryView({ instanceId }: QueryViewProps) {
 
   return (
     <div className="flex min-w-0 flex-col gap-3 rounded-md border border-border">
-      <div className="flex gap-2 border-b border-border p-3">
+      <div className="flex items-center gap-2 border-b border-border p-3">
         <form onSubmit={handleSubmit} className="flex min-w-0 flex-1 gap-2">
           <input
             type="text"
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             disabled={isLoading}
-            placeholder="e.g. Show me the 5 most expensive products"
+            placeholder="e.g. Show me the 5 most expensive products, or Change price of Chai to $19.99"
             className="flex-1 rounded-md border border-border bg-bg px-3 py-2 text-sm text-text focus:border-teal focus:outline-none disabled:opacity-50"
           />
           <button
@@ -118,6 +121,15 @@ export default function QueryView({ instanceId }: QueryViewProps) {
             {isLoading ? "Working…" : "Ask"}
           </button>
         </form>
+
+        <button
+          type="button"
+          onClick={() => setIsAuditOpen(true)}
+          className="rounded-md border border-border px-3 py-2 text-xs font-medium text-muted hover:text-text hover:bg-surface2 transition-colors whitespace-nowrap"
+          title="View database write audit trail"
+        >
+          Audit Log
+        </button>
       </div>
 
       <div className="flex flex-col gap-3 p-3 pt-0">
@@ -133,13 +145,33 @@ export default function QueryView({ instanceId }: QueryViewProps) {
           </div>
         )}
 
-        {result && <UiSpecRenderer spec={result} />}
+        {result && (
+          <UiSpecRenderer
+            spec={result}
+            instanceId={instanceId}
+            onCancel={() => setResult(null)}
+          />
+        )}
       </div>
+
+      <AuditLogModal isOpen={isAuditOpen} onClose={() => setIsAuditOpen(false)} />
     </div>
   );
 }
 
-function UiSpecRenderer({ spec }: { spec: UiSpecResponse }) {
+function UiSpecRenderer({
+  spec,
+  instanceId,
+  onCancel,
+}: {
+  spec: UiSpecResponse;
+  instanceId: string;
+  onCancel?: () => void;
+}) {
+  if (spec.type === "Form") {
+    return <FormView spec={spec} instanceId={instanceId} onCancel={onCancel} />;
+  }
+
   return (
     <div className="flex flex-col gap-2">
       <div>

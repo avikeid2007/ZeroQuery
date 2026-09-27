@@ -1,4 +1,9 @@
+using System.Text.Json;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Zeroquery.Core.Persistence;
+using Zeroquery.Core.Security.DataProtection;
 
 namespace Zeroquery.Core.Orchestration;
 
@@ -17,13 +22,8 @@ public sealed record LlmSettingsView(string ModelId, bool IsApiKeyConfigured, st
 /// Holds the LLM provider settings (API key, model id) that <see cref="OpenRouterLlmProvider"/>
 /// reads on every call. Seeded at startup from <see cref="OpenRouterOptions"/> (env vars /
 /// appsettings — see doc/Plan.md Section 8), but can be updated at runtime through the
-/// settings UI without restarting the backend, so self-hosters don't have to touch
-/// environment variables or config files at all if they don't want to.
-///
-/// Runtime updates are process-local and in-memory only — they don't persist across an app
-/// restart, and only apply to this single backend instance. That's an intentional v1 scope
-/// limit; if persistence across restarts is needed later, this is the seam to add it behind
-/// (e.g. write-through to a local settings file or secret store).
+/// settings UI. When <see cref="PersistenceOptions.IsSaveMode"/> is true, settings persist
+/// to disk encrypted across backend restarts (Phase 7).
 /// </summary>
 public interface ILlmSettingsStore
 {
@@ -41,12 +41,68 @@ public interface ILlmSettingsStore
 
 public sealed class LlmSettingsStore : ILlmSettingsStore
 {
+    private sealed record PersistedSettings(string? EncryptedApiKey, string? ModelId);
+
     private readonly Lock _lock = new();
+    private readonly PersistenceOptions? _persistenceOptions;
+    private readonly IConnectionStringProtector? _protector;
+    private readonly ILogger<LlmSettingsStore> _logger;
+    private readonly string? _filePath;
     private LlmSettings _current;
 
-    public LlmSettingsStore(IOptions<OpenRouterOptions> options)
+    public LlmSettingsStore(
+        IOptions<OpenRouterOptions> options,
+        IOptions<PersistenceOptions>? persistenceOptions = null,
+        IConnectionStringProtector? protector = null,
+        ILogger<LlmSettingsStore>? logger = null)
     {
+        _persistenceOptions = persistenceOptions?.Value;
+        _protector = protector;
+        _logger = logger ?? NullLogger<LlmSettingsStore>.Instance;
+
         _current = new LlmSettings(options.Value.ApiKey, options.Value.ModelId);
+
+        if (_persistenceOptions?.IsSaveMode == true)
+        {
+            _filePath = Path.Combine(_persistenceOptions.StorageDirectory, "llm-settings.json");
+            LoadFromDisk();
+        }
+    }
+
+    private void LoadFromDisk()
+    {
+        if (_filePath is null || !File.Exists(_filePath)) return;
+
+        try
+        {
+            var json = File.ReadAllText(_filePath);
+            var persisted = JsonSerializer.Deserialize<PersistedSettings>(json);
+            if (persisted is not null)
+            {
+                var apiKey = !string.IsNullOrWhiteSpace(persisted.EncryptedApiKey) && _protector is not null
+                    ? _protector.Unprotect(persisted.EncryptedApiKey)
+                    : _current.ApiKey;
+
+                var modelId = !string.IsNullOrWhiteSpace(persisted.ModelId)
+                    ? persisted.ModelId
+                    : _current.ModelId;
+
+                // Only override if startup config did not explicitly define them
+                if (string.IsNullOrWhiteSpace(_current.ApiKey) && !string.IsNullOrWhiteSpace(apiKey))
+                {
+                    _current = _current with { ApiKey = apiKey };
+                }
+
+                if (!string.IsNullOrWhiteSpace(modelId))
+                {
+                    _current = _current with { ModelId = modelId };
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to load LLM settings from {FilePath}.", _filePath);
+        }
     }
 
     public LlmSettings Current
@@ -75,6 +131,32 @@ public sealed class LlmSettingsStore : ILlmSettingsStore
             var nextApiKey = apiKey ?? _current.ApiKey;
             var nextModelId = string.IsNullOrWhiteSpace(modelId) ? _current.ModelId : modelId;
             _current = new LlmSettings(nextApiKey, nextModelId);
+
+            if (_persistenceOptions?.IsSaveMode == true && _filePath is not null)
+            {
+                SaveToDisk(nextApiKey, nextModelId);
+            }
+        }
+    }
+
+    private void SaveToDisk(string apiKey, string modelId)
+    {
+        try
+        {
+            if (_persistenceOptions is null || _filePath is null) return;
+            Directory.CreateDirectory(_persistenceOptions.StorageDirectory);
+
+            var encryptedKey = !string.IsNullOrWhiteSpace(apiKey) && _protector is not null
+                ? _protector.Protect(apiKey)
+                : null;
+
+            var persisted = new PersistedSettings(encryptedKey, modelId);
+            var json = JsonSerializer.Serialize(persisted, new JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(_filePath, json);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to persist LLM settings to {FilePath}.", _filePath);
         }
     }
 

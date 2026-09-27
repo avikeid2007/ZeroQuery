@@ -2,6 +2,7 @@ using System.Net.ServerSentEvents;
 using System.Text.Json;
 using System.Threading.Channels;
 using Zeroquery.Api.Introspection;
+using Zeroquery.Api.Security;
 using Zeroquery.Core.Orchestration;
 using Zeroquery.Core.ProcessManagement;
 
@@ -13,6 +14,7 @@ namespace Zeroquery.Api.Query;
 /// Server-Sent Events progress reporting (doc/Plan.md Phase 5, via .NET 10's
 /// <see cref="TypedResults.ServerSentEvents{T}(IAsyncEnumerable{SseItem{T}})"/>) so the
 /// frontend can show what the tool-calling loop is doing instead of a static spinner.
+/// Protected by Phase 6 query rate limiting.
 /// </summary>
 public static class QueryEndpoints
 {
@@ -29,6 +31,7 @@ public static class QueryEndpoints
         app.MapPost("/api/instances/{id}/query", HandleQueryAsync)
             .WithName("QueryDabInstance")
             .WithSummary("Runs a natural-language query against a running DAB instance's MCP tools and returns a UI Spec.")
+            .RequireRateLimiting(RateLimitingExtensions.QueryPolicy)
             .Produces<UiSpecResponse>(StatusCodes.Status200OK)
             .Produces<ErrorResponse>(StatusCodes.Status400BadRequest)
             .Produces<ErrorResponse>(StatusCodes.Status404NotFound)
@@ -41,6 +44,7 @@ public static class QueryEndpoints
                 "Same as POST /api/instances/{id}/query, but streams 'progress' Server-Sent " +
                 "Events while the tool-calling loop runs, followed by a final 'result' (or " +
                 "'error') event instead of a single blocking JSON response.")
+            .RequireRateLimiting(RateLimitingExtensions.QueryPolicy)
             .Produces(StatusCodes.Status200OK)
             .Produces<ErrorResponse>(StatusCodes.Status400BadRequest)
             .Produces<ErrorResponse>(StatusCodes.Status404NotFound)

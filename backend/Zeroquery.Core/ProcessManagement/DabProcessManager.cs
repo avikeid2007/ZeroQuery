@@ -2,7 +2,9 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Net.Sockets;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Zeroquery.Core.ProcessManagement.ResourceLimits;
 
 namespace Zeroquery.Core.ProcessManagement;
 
@@ -23,11 +25,16 @@ public sealed class DabProcessManager : IDisposable
     private readonly ConcurrentDictionary<string, DabInstance> _instances = new();
     private readonly DabProcessManagerOptions _options;
     private readonly ILogger<DabProcessManager> _logger;
+    private readonly IProcessResourceLimiter _resourceLimiter;
 
-    public DabProcessManager(IOptions<DabProcessManagerOptions> options, ILogger<DabProcessManager> logger)
+    public DabProcessManager(
+        IOptions<DabProcessManagerOptions> options,
+        ILogger<DabProcessManager> logger,
+        IProcessResourceLimiter? resourceLimiter = null)
     {
         _options = options.Value;
         _logger = logger;
+        _resourceLimiter = resourceLimiter ?? new ProcessResourceLimiter(NullLogger<ProcessResourceLimiter>.Instance);
     }
 
     /// <summary>Snapshot of all tracked instances (running, starting, idle, stopped, or errored).</summary>
@@ -41,10 +48,11 @@ public sealed class DabProcessManager : IDisposable
     /// Env vars to set on the child process — must include whatever variable name the config's
     /// <c>@env('NAME')</c> connection-string reference expects. Zeroquery never logs these.
     /// </param>
+    /// <param name="clientIp">Client IP address initiating the connection (used for per-IP abuse control).</param>
     /// <exception cref="DabProcessManagerException">
     /// Thrown if the concurrent instance cap is reached or no free port is available.
     /// </exception>
-    public DabInstance StartInstance(string configPath, IReadOnlyDictionary<string, string> environmentVariables)
+    public DabInstance StartInstance(string configPath, IReadOnlyDictionary<string, string> environmentVariables, string? clientIp = null)
     {
         var runningCount = _instances.Values.Count(i =>
             i.Status is DabInstanceStatus.Provisioning or DabInstanceStatus.Starting
@@ -57,6 +65,21 @@ public sealed class DabProcessManager : IDisposable
                 "Disconnect an existing database or wait for an idle instance to be reclaimed.");
         }
 
+        if (!string.IsNullOrWhiteSpace(clientIp) && _options.MaxInstancesPerIp > 0)
+        {
+            var clientCount = _instances.Values.Count(i =>
+                i.ClientIp == clientIp &&
+                i.Status is DabInstanceStatus.Provisioning or DabInstanceStatus.Starting
+                    or DabInstanceStatus.Running or DabInstanceStatus.Idle);
+
+            if (clientCount >= _options.MaxInstancesPerIp)
+            {
+                throw new DabProcessManagerException(
+                    $"Maximum concurrent DAB instances per client ({_options.MaxInstancesPerIp}) reached. " +
+                    "Disconnect an existing database or wait for an idle instance to be reclaimed.");
+            }
+        }
+
         var excludePorts = _instances.Values.Select(i => i.Port).ToHashSet();
         var port = FreePortFinder.FindFreePort(_options.PortRangeStart, _options.PortRangeEnd, excludePorts);
 
@@ -65,6 +88,7 @@ public sealed class DabProcessManager : IDisposable
             Id = Guid.NewGuid().ToString("n"),
             ConfigPath = configPath,
             Port = port,
+            ClientIp = clientIp,
             Status = DabInstanceStatus.Provisioning
         };
 
@@ -89,17 +113,61 @@ public sealed class DabProcessManager : IDisposable
         return instance;
     }
 
+    public string ResolveDabExecutablePath()
+    {
+        if (File.Exists(_options.DabExecutablePath))
+        {
+            return _options.DabExecutablePath;
+        }
+
+        if (string.Equals(_options.DabExecutablePath, "dab", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(_options.DabExecutablePath, "dab.exe", StringComparison.OrdinalIgnoreCase))
+        {
+            var userToolsPath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                ".dotnet",
+                "tools",
+                OperatingSystem.IsWindows() ? "dab.exe" : "dab");
+
+            if (File.Exists(userToolsPath))
+            {
+                return userToolsPath;
+            }
+        }
+
+        return _options.DabExecutablePath;
+    }
+
     private void LaunchProcess(DabInstance instance, IReadOnlyDictionary<string, string> environmentVariables)
     {
+        var executablePath = ResolveDabExecutablePath();
+
         var startInfo = new ProcessStartInfo
         {
-            FileName = _options.DabExecutablePath,
+            FileName = executablePath,
             Arguments = $"start --config \"{instance.ConfigPath}\" --no-https-redirect",
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
             CreateNoWindow = true
         };
+
+        if (!string.IsNullOrWhiteSpace(_options.SubprocessUserName))
+        {
+            startInfo.UserName = _options.SubprocessUserName;
+            if (OperatingSystem.IsWindows())
+            {
+                if (!string.IsNullOrWhiteSpace(_options.SubprocessPassword))
+                {
+                    startInfo.PasswordInClearText = _options.SubprocessPassword;
+                }
+                if (!string.IsNullOrWhiteSpace(_options.SubprocessDomain))
+                {
+                    startInfo.Domain = _options.SubprocessDomain;
+                }
+            }
+            _logger.LogInformation("Launching DAB subprocess under dedicated user '{UserName}'.", _options.SubprocessUserName);
+        }
 
         startInfo.Environment["ASPNETCORE_URLS"] = $"http://localhost:{instance.Port}";
         foreach (var (key, value) in environmentVariables)
@@ -119,7 +187,21 @@ public sealed class DabProcessManager : IDisposable
 
         process.Exited += (_, _) => OnProcessExited(instance);
 
-        process.Start();
+        try
+        {
+            process.Start();
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception w && (w.NativeErrorCode == 2 || w.Message.Contains("cannot find the file", StringComparison.OrdinalIgnoreCase))
+                                   || ex.Message.Contains("cannot find the file", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new DabProcessManagerException(
+                $"Microsoft Data API builder (dab) is not installed or could not be found at '{executablePath}'. " +
+                "Please install it using 'dotnet tool install -g Microsoft.DataApiBuilder' or click 'Install DAB'.", ex);
+        }
+
+        // Apply CPU and memory limits
+        _resourceLimiter.ApplyLimits(process, _options.MaxMemoryMegabytes, _options.CpuLimitPercent);
+
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
 
@@ -238,7 +320,7 @@ public sealed class DabProcessManager : IDisposable
         if (_instances.TryGetValue(id, out var instance))
         {
             instance.LastUsedAt = DateTimeOffset.UtcNow;
-            if (instance.Status == DabInstanceStatus.Idle)
+            if (instance.Status is DabInstanceStatus.Idle or DabInstanceStatus.Starting)
             {
                 instance.Status = DabInstanceStatus.Running;
             }
@@ -289,5 +371,122 @@ public sealed class DabProcessManager : IDisposable
         }
     }
 
-    public void Dispose() => StopAll();
+    /// <summary>
+    /// Checks whether the DAB CLI executable can be found and executed.
+    /// </summary>
+    public async Task<DabStatusInfo> GetDabStatusAsync(CancellationToken cancellationToken = default)
+    {
+        var executable = ResolveDabExecutablePath();
+        try
+        {
+            using var proc = new Process
+            {
+                StartInfo = new ProcessStartInfo
+                {
+                    FileName = executable,
+                    Arguments = "--version",
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                }
+            };
+
+            proc.Start();
+            var outputTask = proc.StandardOutput.ReadToEndAsync(cancellationToken);
+            await proc.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+            var output = await outputTask.ConfigureAwait(false);
+
+            if (proc.ExitCode == 0)
+            {
+                return new DabStatusInfo(IsInstalled: true, Version: output.Trim(), ExecutablePath: executable, Error: null);
+            }
+
+            return new DabStatusInfo(IsInstalled: false, Version: null, ExecutablePath: executable, Error: $"Exit code {proc.ExitCode}");
+        }
+        catch (Exception ex)
+        {
+            return new DabStatusInfo(IsInstalled: false, Version: null, ExecutablePath: executable, Error: ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Installs Microsoft.DataApiBuilder globally using dotnet tool install.
+    /// </summary>
+    public async Task<DabInstallResult> InstallDabAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            using var proc = new Process
+            {
+                StartInfo = new ProcessStartInfo
+                {
+                    FileName = "dotnet",
+                    Arguments = "tool install -g Microsoft.DataApiBuilder",
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                }
+            };
+
+            proc.Start();
+            var outTask = proc.StandardOutput.ReadToEndAsync(cancellationToken);
+            var errTask = proc.StandardError.ReadToEndAsync(cancellationToken);
+            await proc.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+            var stdout = await outTask.ConfigureAwait(false);
+            var stderr = await errTask.ConfigureAwait(false);
+
+            if (proc.ExitCode == 0)
+            {
+                _logger.LogInformation("Successfully installed Microsoft.DataApiBuilder globally: {Output}", stdout);
+                return new DabInstallResult(Success: true, Message: stdout.Trim());
+            }
+
+            // If already installed, try tool update
+            if (stderr.Contains("already installed", StringComparison.OrdinalIgnoreCase) ||
+                stdout.Contains("already installed", StringComparison.OrdinalIgnoreCase))
+            {
+                using var updateProc = new Process
+                {
+                    StartInfo = new ProcessStartInfo
+                    {
+                        FileName = "dotnet",
+                        Arguments = "tool update -g Microsoft.DataApiBuilder",
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    }
+                };
+
+                updateProc.Start();
+                var updateOutTask = updateProc.StandardOutput.ReadToEndAsync(cancellationToken);
+                var updateErrTask = updateProc.StandardError.ReadToEndAsync(cancellationToken);
+                await updateProc.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+                var updateOut = await updateOutTask.ConfigureAwait(false);
+                var updateErr = await updateErrTask.ConfigureAwait(false);
+
+                if (updateProc.ExitCode == 0)
+                {
+                    return new DabInstallResult(Success: true, Message: updateOut.Trim());
+                }
+
+                return new DabInstallResult(Success: false, Message: $"{updateErr}\n{updateOut}".Trim());
+            }
+
+            return new DabInstallResult(Success: false, Message: $"{stderr}\n{stdout}".Trim());
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to run dotnet tool install for Microsoft.DataApiBuilder.");
+            return new DabInstallResult(Success: false, Message: ex.Message);
+        }
+    }
+
+    public void Dispose()
+    {
+        StopAll();
+        _resourceLimiter.Dispose();
+    }
 }

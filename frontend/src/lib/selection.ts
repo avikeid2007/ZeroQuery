@@ -7,17 +7,25 @@ export interface ColumnSelection {
   description: string;
 }
 
+/** Opt-in write permissions for an entity (Phase 8 full CRUD). Defaults to all false (read-only). */
+export interface TableWriteActions {
+  create: boolean;
+  update: boolean;
+  delete: boolean;
+}
+
 /** User's picker choices for a single table/view: whether it's exposed, its description, and its columns. */
 export interface TableSelection {
   selected: boolean;
   description: string;
   columns: Record<string, ColumnSelection>;
+  writeActions: TableWriteActions;
 }
 
 /** Full picker state, keyed by the table's schema-qualified name (see qualifiedTableName). */
 export type PickerSelection = Record<string, TableSelection>;
 
-/** Builds initial picker state from an introspection result — everything selected by default, descriptions empty. */
+/** Builds initial picker state from an introspection result — everything selected by default, descriptions empty, read-only. */
 export function buildInitialSelection(tables: TableDto[]): PickerSelection {
   const selection: PickerSelection = {};
   for (const table of tables) {
@@ -26,7 +34,12 @@ export function buildInitialSelection(tables: TableDto[]): PickerSelection {
     for (const column of table.columns) {
       columns[column.name] = { selected: true, description: "" };
     }
-    selection[key] = { selected: true, description: "", columns };
+    selection[key] = {
+      selected: true,
+      description: "",
+      columns,
+      writeActions: { create: false, update: false, delete: false },
+    };
   }
   return selection;
 }
@@ -59,6 +72,11 @@ export function toEntitySelectionDtos(tables: TableDto[], selection: PickerSelec
         description: tableSelection.columns[c.name]?.description?.trim() || null,
       }));
 
+    const writeActions: string[] = [];
+    if (tableSelection.writeActions?.create) writeActions.push("create");
+    if (tableSelection.writeActions?.update) writeActions.push("update");
+    if (tableSelection.writeActions?.delete) writeActions.push("delete");
+
     result.push({
       schema: table.schema,
       tableName: table.name,
@@ -66,7 +84,7 @@ export function toEntitySelectionDtos(tables: TableDto[], selection: PickerSelec
       columns,
       entityName: null,
       description: tableSelection.description.trim() || null,
-      writeActions: [],
+      writeActions,
     });
   }
 

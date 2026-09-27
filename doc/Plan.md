@@ -152,10 +152,10 @@ Document all three prominently in the OSS README/`.env.example` — self-hosters
 | **3. Process Manager** | Subprocess spawn/kill, port registry, idle timeout, health checks | A DAB MCP instance can be started, queried, and reaped on demand | ✅ Done |
 | **4. Orchestration skeleton** | ASP.NET API, `ILlmProvider`, OpenRouter integration against a running instance | Prompt → real data → UI Spec, single-instance | ✅ Done |
 | **5. Frontend** | Setup wizard + query view, component renderer, SSE streaming | Full user flow, one DB at a time | ✅ Done |
-| **6. Security hardening** | Encryption at rest, egress restrictions, resource caps, rate limits | Safe for public community use | ⬜ Not started |
-| **7. Persistence** | Saved connections, "reconnect" flow, "forget connection" action | Return visits don't require re-setup | ⬜ Not started |
-| **8. Write access (full CRUD)** | Per-entity write permissions in picker UI, confirm-before-execute flow in the `form` UI Spec type, audit trail, write-specific rate limits | Create/update/delete supported, opt-in per table, with a human confirmation step before any write reaches the MCP server | ⬜ Not started |
-| **9. Polish/OSS readiness** | README, docs, error states, deployment guide (Docker Compose for the whole stack) | Ready to publish/share | 🟡 Partial (README exists; deployment guide/Docker Compose not yet written) |
+| **6. Security hardening** | Encryption at rest, egress restrictions, resource caps, rate limits | Safe for public community use | ✅ Done |
+| **7. Persistence** | Saved connections, "reconnect" flow, "forget connection" action | Return visits don't require re-setup | ✅ Done |
+| **8. Write access (full CRUD)** | Per-entity write permissions in picker UI, confirm-before-execute flow in the `form` UI Spec type, audit trail, write-specific rate limits | Create/update/delete supported, opt-in per table, with a human confirmation step before any write reaches the MCP server | ✅ Done |
+| **9. Polish/OSS readiness** | README, docs, error states, deployment guide (Docker Compose for the whole stack) | Ready to publish/share | 🟡 Partial *(next up)* |
 
 ### 6.1 Detailed progress checklist
 
@@ -193,29 +193,29 @@ check here first before assuming a phase is unfinished or re-doing completed wor
 - [x] `POST /api/instances/{id}/query/stream` (SSE) + live progress UI
 - [x] Backend upgraded to .NET 10 to get native `TypedResults.ServerSentEvents`
 
-**Phase 6 — Security hardening** ⬜ *(next up)*
-- [ ] Encrypt connection strings at rest (currently held in plain memory / temp config files)
-- [ ] Block SSRF-style connections to internal/private IP ranges
-- [ ] Per-instance CPU/memory resource caps on `dab` subprocesses
-- [ ] Rate-limit queries + concurrent instances per user/IP
-- [ ] Run DAB subprocesses under a dedicated low-privilege OS account
+**Phase 6 — Security hardening** ✅
+- [x] Encrypt connection strings at rest (`IConnectionStringProtector` via ASP.NET Data Protection API)
+- [x] Block SSRF-style connections to internal/private IP ranges (`ISsrfValidator` / `SsrfValidator`)
+- [x] Per-instance CPU/memory resource caps on `dab` subprocesses (`IProcessResourceLimiter`, Win32 Job Object with kill-on-close)
+- [x] Rate-limit queries + concurrent instances per user/IP (ASP.NET Core RateLimiter policies + `MaxInstancesPerIp` cap)
+- [x] Run DAB subprocesses under a dedicated low-privilege OS account (`MCP_SUBPROCESS_USER`, `MCP_SUBPROCESS_PASSWORD`, `MCP_SUBPROCESS_DOMAIN`)
 
-**Phase 7 — Persistence** ⬜
-- [ ] Saved connections (survive a backend restart — LLM settings and connection strings are currently in-memory only)
-- [ ] "Reconnect to [DB]?" explicit confirmation flow (no silent auto-reconnect)
-- [ ] "Forget this connection" action
+**Phase 7 — Persistence** ✅
+- [x] Saved connections (survive a backend restart — connection string encrypted at rest via Data Protection API, `dab-config.json` text, and metadata)
+- [x] LLM provider settings (OpenRouter API key and model) persisted to disk encrypted across backend restarts
+- [x] "Reconnect to [DB]?" explicit confirmation flow (no silent auto-reconnect)
+- [x] "Forget this connection" action (deletion from persistent storage)
+- [x] Configurable persistence modes (`MCP_PERSISTENCE_MODE`: `save` vs `session-only`; `MCP_PERSISTENCE_DIR`)
+- [x] Frontend UI integration: `SavedConnectionsList` on the Connect step, explicit modal confirmation on reconnect, direct transition into active `QueryView`, and "Save this connection profile" toggle in `ConfigPreview`.
 
-**Phase 8 — Write access (full CRUD)** ⬜
-- [ ] Per-entity, per-operation write permissions in the picker UI
-- [ ] `form` UI Spec type + confirm-before-execute flow
-- [ ] Audit trail for writes (who/what/when)
-- [ ] Write-specific (tighter) rate limits
+**Phase 8 — Write access (full CRUD)** ✅
+- [x] Per-entity, per-operation write permissions in the picker UI (`Create`, `Update`, `Delete` opt-ins on base tables with primary keys)
+- [x] `form` UI Spec type + confirm-before-execute flow (`UiSpecType.Form`, diff preview, editable proposed values, human confirmation checkbox)
+- [x] Autonomous mutation tool exclusion (LLM cannot execute writes directly behind the scenes; mutations require human confirmation)
+- [x] Dedicated write audit trail (`IWriteAuditStore` / `FileWriteAuditStore`, `audit-log.json`, `GET /api/audit`, `AuditLogModal.tsx`)
+- [x] Write-specific (tighter) rate limits (`mutations` policy, default 5 mutations/min per IP via `RATE_LIMIT_MUTATIONS_PER_MINUTE`)
 
-**Phase 9 — Polish / OSS readiness** 🟡
-- [x] README with setup/run instructions
-- [x] Repo memory / architecture notes kept current per phase
-- [ ] Dedicated deployment guide (Docker Compose for the whole stack: API + frontend + `dab`)
-- [ ] Broader error-state pass across the UI (beyond what each phase already covers)
+**Phase 9 — Polish / OSS readiness** 🟡 *(next up)*
 
 ---
 

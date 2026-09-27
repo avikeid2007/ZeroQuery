@@ -144,12 +144,31 @@ public sealed class OrchestrationService
         }
     }
 
+    private static readonly HashSet<string> MutationToolNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "create_record", "update_record", "delete_record", "execute_mutation"
+    };
+
     private static List<LlmTool> BuildLlmTools(IReadOnlyList<McpTool> mcpTools)
     {
-        var tools = mcpTools.Select(t => new LlmTool(t.Name, t.Description, t.InputSchema)).ToList();
+        // Guard against autonomous unconfirmed writes: only read-oriented tools are exposed to the LLM.
+        var tools = mcpTools
+            .Where(t => !IsMutationTool(t.Name))
+            .Select(t => new LlmTool(t.Name, t.Description, t.InputSchema))
+            .ToList();
         tools.Add(new LlmTool(RenderResultToolName, RenderResultDescription, RenderResultSchema));
         return tools;
     }
+
+    private static bool IsMutationTool(string toolName) =>
+        MutationToolNames.Contains(toolName) ||
+        toolName.StartsWith("create_", StringComparison.OrdinalIgnoreCase) ||
+        toolName.StartsWith("update_", StringComparison.OrdinalIgnoreCase) ||
+        toolName.StartsWith("delete_", StringComparison.OrdinalIgnoreCase) ||
+        toolName.StartsWith("insert_", StringComparison.OrdinalIgnoreCase) ||
+        toolName.EndsWith("_create", StringComparison.OrdinalIgnoreCase) ||
+        toolName.EndsWith("_update", StringComparison.OrdinalIgnoreCase) ||
+        toolName.EndsWith("_delete", StringComparison.OrdinalIgnoreCase);
 
     private const string RenderResultDescription =
         "Call this exactly once, as your final step, to return the answer to the user. Do not " +
@@ -161,7 +180,7 @@ public sealed class OrchestrationService
           "type": "object",
           "required": ["type", "title", "columns", "rows", "meta"],
           "properties": {
-            "type": { "type": "string", "enum": ["table", "chart", "card", "stat"] },
+            "type": { "type": "string", "enum": ["table", "chart", "card", "stat", "form"] },
             "title": { "type": "string" },
             "columns": {
               "type": "array",
@@ -182,18 +201,48 @@ public sealed class OrchestrationService
               "properties": {
                 "sourceEntity": { "type": "string" }
               }
+            },
+            "form": {
+              "type": "object",
+              "required": ["operation", "entity", "fields"],
+              "properties": {
+                "operation": { "type": "string", "enum": ["create", "update", "delete"] },
+                "entity": { "type": "string" },
+                "primaryKey": { "type": "object" },
+                "fields": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": ["name", "label"],
+                    "properties": {
+                      "name": { "type": "string" },
+                      "label": { "type": "string" },
+                      "currentValue": {},
+                      "proposedValue": {},
+                      "isPrimaryKey": { "type": "boolean" }
+                    }
+                  }
+                }
+              }
             }
           }
         }
         """)!;
 
     private static string BuildSystemPrompt() => """
-        You are Zeroquery's query assistant. You answer questions about a SQL database using
-        the provided tools. Always call 'describe_entities' first if you don't already know
-        the exact entity/field names. Use 'read_records' or 'aggregate_records' to fetch data
-        — never guess at data you haven't retrieved. When you have the answer, call
-        'render_result' exactly once with the data formatted for the user; never answer in
-        plain text.
+        You are Zeroquery's query assistant. You answer questions and prepare database actions using
+        the provided tools.
+        - For questions about data: Always call 'describe_entities' first if you don't already know
+          the exact entity/field names. Use 'read_records' to fetch real data — never guess at data
+          you haven't retrieved. When you have the answer, call 'render_result' exactly once with
+          type 'table', 'chart', 'card', or 'stat'.
+        - For data modification requests (create, update, delete): Direct mutations are forbidden
+          without explicit human confirmation. First inspect the entity with 'describe_entities'
+          or 'read_records' (to find existing values/keys if updating or deleting). Then call
+          'render_result' with type 'form', providing the 'form' object with 'operation'
+          ('create' | 'update' | 'delete'), 'entity', 'primaryKey' (for update/delete), and 'fields'
+          showing previous vs proposed values.
+        - Never respond in plain text — always conclude by calling 'render_result'.
         """;
 
     private static UiSpec ParseUiSpec(string argumentsJson)
@@ -228,22 +277,44 @@ public sealed class OrchestrationService
         var sourceEntity = root["meta"]?["sourceEntity"]?.GetValue<string>() ?? string.Empty;
         var meta = new UiSpecMeta(sourceEntity, DateTimeOffset.UtcNow);
 
-        return new UiSpec(type, title, columns, rows, chartType, meta);
+        UiSpecForm? form = null;
+        if (root["form"] is JsonObject formObj)
+        {
+            var op = formObj["operation"]?.GetValue<string>() ?? "update";
+            var entity = formObj["entity"]?.GetValue<string>() ?? sourceEntity;
+            var pk = formObj["primaryKey"] is JsonObject pkObj ? ToRowDictionary(pkObj) : null;
+            var fields = (formObj["fields"] as JsonArray)?
+                .OfType<JsonObject>()
+                .Select(f => new UiSpecFormField(
+                    f["name"]?.GetValue<string>() ?? string.Empty,
+                    f["label"]?.GetValue<string>() ?? f["name"]?.GetValue<string>() ?? string.Empty,
+                    ExtractValue(f["currentValue"]),
+                    ExtractValue(f["proposedValue"]),
+                    f["isPrimaryKey"]?.GetValue<bool>() ?? false))
+                .ToList() ?? new List<UiSpecFormField>();
+
+            form = new UiSpecForm(op, entity, pk, fields);
+        }
+
+        return new UiSpec(type, title, columns, rows, chartType, meta, form);
     }
+
+    private static object? ExtractValue(JsonNode? node) => node switch
+    {
+        null => null,
+        JsonValue v when v.TryGetValue(out string? s) => s,
+        JsonValue v when v.TryGetValue(out double d) => d,
+        JsonValue v when v.TryGetValue(out long l) => l,
+        JsonValue v when v.TryGetValue(out bool b) => b,
+        _ => node.ToJsonString()
+    };
 
     private static Dictionary<string, object?> ToRowDictionary(JsonObject row)
     {
         var dict = new Dictionary<string, object?>();
         foreach (var (key, value) in row)
         {
-            dict[key] = value switch
-            {
-                null => null,
-                JsonValue v when v.TryGetValue(out string? s) => s,
-                JsonValue v when v.TryGetValue(out double d) => d,
-                JsonValue v when v.TryGetValue(out bool b) => b,
-                _ => value.ToJsonString()
-            };
+            dict[key] = ExtractValue(value);
         }
         return dict;
     }

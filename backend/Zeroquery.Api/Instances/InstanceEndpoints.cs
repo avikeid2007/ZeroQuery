@@ -1,11 +1,15 @@
 using Zeroquery.Api.Introspection;
+using Zeroquery.Api.Security;
 using Zeroquery.Core.ProcessManagement;
+using Zeroquery.Core.Security.DataProtection;
+using Zeroquery.Core.Security.Ssrf;
 
 namespace Zeroquery.Api.Instances;
 
 /// <summary>
 /// Maps the Phase 3 instance management endpoints: start a DAB subprocess for a generated
 /// config, poll its status, and disconnect (stop) it on demand (doc/Plan.md Section 2.4).
+/// Hardened with Phase 6 security controls (SSRF protection, rate limiting, and per-client instance capping).
 /// </summary>
 public static class InstanceEndpoints
 {
@@ -21,6 +25,7 @@ public static class InstanceEndpoints
         group.MapPost("/", HandleStartAsync)
             .WithName("StartDabInstance")
             .WithSummary("Writes the given dab-config.json to disk and starts a DAB subprocess for it.")
+            .RequireRateLimiting(RateLimitingExtensions.InstancesPolicy)
             .Produces<InstanceStatusResponse>(StatusCodes.Status200OK)
             .Produces<ErrorResponse>(StatusCodes.Status400BadRequest)
             .Produces<ErrorResponse>(StatusCodes.Status429TooManyRequests);
@@ -37,10 +42,35 @@ public static class InstanceEndpoints
             .Produces(StatusCodes.Status204NoContent)
             .Produces<ErrorResponse>(StatusCodes.Status404NotFound);
 
+        group.MapGet("/dab-status", async (DabProcessManager processManager, CancellationToken ct) =>
+        {
+            var status = await processManager.GetDabStatusAsync(ct);
+            return Results.Ok(status);
+        })
+        .WithName("GetDabStatus")
+        .WithSummary("Checks if Microsoft Data API builder (dab) CLI is installed and available.")
+        .Produces<DabStatusInfo>(StatusCodes.Status200OK);
+
+        group.MapPost("/install-dab", async (DabProcessManager processManager, CancellationToken ct) =>
+        {
+            var result = await processManager.InstallDabAsync(ct);
+            return result.Success ? Results.Ok(result) : Results.BadRequest(result);
+        })
+        .WithName("InstallDab")
+        .WithSummary("Installs or updates Microsoft.DataApiBuilder globally.")
+        .Produces<DabInstallResult>(StatusCodes.Status200OK)
+        .Produces<DabInstallResult>(StatusCodes.Status400BadRequest);
+
         return app;
     }
 
-    private static async Task<IResult> HandleStartAsync(StartInstanceRequest request, DabProcessManager processManager)
+    private static async Task<IResult> HandleStartAsync(
+        StartInstanceRequest request,
+        DabProcessManager processManager,
+        ISsrfValidator ssrfValidator,
+        IConnectionStringProtector connectionStringProtector,
+        HttpContext httpContext,
+        CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(request.ConfigJson))
         {
@@ -52,18 +82,37 @@ public static class InstanceEndpoints
             return Results.BadRequest(new ErrorResponse("connectionStringEnvVarName is required."));
         }
 
-        Directory.CreateDirectory(ConfigDirectory);
-        var configPath = Path.Combine(ConfigDirectory, $"{Guid.NewGuid():n}.json");
-        await File.WriteAllTextAsync(configPath, request.ConfigJson);
-
-        var envVars = new Dictionary<string, string>
+        if (string.IsNullOrWhiteSpace(request.ConnectionString))
         {
-            [request.ConnectionStringEnvVarName] = request.ConnectionString
-        };
+            return Results.BadRequest(new ErrorResponse("connectionString is required."));
+        }
+
+        var connectionString = connectionStringProtector.Unprotect(request.ConnectionString);
 
         try
         {
-            var instance = processManager.StartInstance(configPath, envVars);
+            await ssrfValidator.ValidateConnectionStringAsync(connectionString, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (SsrfException ex)
+        {
+            return Results.BadRequest(new ErrorResponse(ex.Message));
+        }
+
+        Directory.CreateDirectory(ConfigDirectory);
+        var configPath = Path.Combine(ConfigDirectory, $"{Guid.NewGuid():n}.json");
+        await File.WriteAllTextAsync(configPath, request.ConfigJson, cancellationToken);
+
+        var envVars = new Dictionary<string, string>
+        {
+            [request.ConnectionStringEnvVarName] = connectionString
+        };
+
+        var clientIp = RateLimitingExtensions.ResolveClientIp(httpContext);
+
+        try
+        {
+            var instance = processManager.StartInstance(configPath, envVars, clientIp);
             var status = processManager.RefreshStatus(instance);
             return Results.Ok(InstanceStatusResponse.From(instance, status));
         }

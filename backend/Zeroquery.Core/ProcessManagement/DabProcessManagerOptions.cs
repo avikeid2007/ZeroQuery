@@ -1,11 +1,12 @@
 namespace Zeroquery.Core.ProcessManagement;
 
 /// <summary>
-/// Deployment-configurable settings for the DAB Process Manager (doc/Plan.md Section 4).
+/// Deployment-configurable settings for the DAB Process Manager (doc/Plan.md Section 4 &amp; Phase 6).
 /// Bind from configuration section "DabProcessManager" (env vars: e.g.
 /// <c>DabProcessManager__MaxConcurrentInstances</c>, or the documented
-/// <c>MCP_MAX_CONCURRENT_INSTANCES</c> / <c>MCP_IDLE_TIMEOUT_MINUTES</c> names via explicit
-/// mapping in Program.cs).
+/// <c>MCP_MAX_CONCURRENT_INSTANCES</c> / <c>MCP_IDLE_TIMEOUT_MINUTES</c> /
+/// <c>MCP_INSTANCE_MAX_MEMORY_MB</c> / <c>MCP_INSTANCE_CPU_LIMIT_PERCENT</c> /
+/// <c>MCP_SUBPROCESS_USER</c> / <c>MCP_MAX_INSTANCES_PER_IP</c>).
 /// </summary>
 public sealed class DabProcessManagerOptions
 {
@@ -29,4 +30,23 @@ public sealed class DabProcessManagerOptions
 
     /// <summary>Executable used to launch DAB. Defaults to the "dab" CLI on PATH.</summary>
     public string DabExecutablePath { get; set; } = "dab";
+
+    /// <summary>Maximum memory limit in megabytes for each DAB subprocess (0 = uncapped). Default: 512MB.</summary>
+    public int MaxMemoryMegabytes { get; set; } = 512;
+
+    /// <summary>Maximum CPU percentage limit (1-100) for each DAB subprocess (0 = uncapped). Default: 50%.</summary>
+    public int CpuLimitPercent { get; set; } = 50;
+
+    /// <summary>Optional dedicated low-privilege OS username under which to run the DAB subprocess.</summary>
+    public string? SubprocessUserName { get; set; }
+
+    /// <summary>Optional password for the dedicated low-privilege OS username.</summary>
+    public string? SubprocessPassword { get; set; }
+
+    /// <summary>Optional domain for the dedicated low-privilege OS username.</summary>
+    public string? SubprocessDomain { get; set; }
+
+    /// <summary>Max concurrent instances allowed per client IP address. Default: 2.</summary>
+    public int MaxInstancesPerIp { get; set; } = 2;
 }
+

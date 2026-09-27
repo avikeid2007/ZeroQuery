@@ -26,6 +26,27 @@ public sealed record UiSpecMetaDto(string SourceEntity, DateTimeOffset Generated
     public static UiSpecMetaDto From(UiSpecMeta m) => new(m.SourceEntity, m.GeneratedAt);
 }
 
+public sealed record UiSpecFormFieldDto(
+    string Name,
+    string Label,
+    object? CurrentValue,
+    object? ProposedValue,
+    bool IsPrimaryKey = false)
+{
+    public static UiSpecFormFieldDto From(UiSpecFormField f) =>
+        new(f.Name, f.Label, f.CurrentValue, f.ProposedValue, f.IsPrimaryKey);
+}
+
+public sealed record UiSpecFormDto(
+    string Operation,
+    string Entity,
+    Dictionary<string, object?>? PrimaryKey,
+    IReadOnlyList<UiSpecFormFieldDto> Fields)
+{
+    public static UiSpecFormDto From(UiSpecForm f) =>
+        new(f.Operation, f.Entity, f.PrimaryKey, f.Fields.Select(UiSpecFormFieldDto.From).ToList());
+}
+
 /// <summary>Response body for POST /api/instances/{id}/query — the UI Spec to render.</summary>
 public sealed record UiSpecResponse(
     string Type,
@@ -33,7 +54,8 @@ public sealed record UiSpecResponse(
     IReadOnlyList<UiSpecColumnDto> Columns,
     IReadOnlyList<Dictionary<string, object?>> Rows,
     string? ChartType,
-    UiSpecMetaDto Meta)
+    UiSpecMetaDto Meta,
+    UiSpecFormDto? Form = null)
 {
     public static UiSpecResponse From(UiSpec spec) => new(
         spec.Type.ToString(),
@@ -41,5 +63,6 @@ public sealed record UiSpecResponse(
         spec.Columns.Select(UiSpecColumnDto.From).ToList(),
         spec.Rows,
         spec.ChartType?.ToString(),
-        UiSpecMetaDto.From(spec.Meta));
+        UiSpecMetaDto.From(spec.Meta),
+        spec.Form is null ? null : UiSpecFormDto.From(spec.Form));
 }

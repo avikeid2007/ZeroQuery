@@ -13,6 +13,8 @@ public sealed class FakeLlmProvider : ILlmProvider
     private readonly Queue<LlmCompletion> _scriptedCompletions;
 
     public List<IReadOnlyList<LlmMessage>> RecordedCalls { get; } = new();
+    public List<IReadOnlyList<LlmTool>> RecordedTools { get; } = new();
+    public IReadOnlyList<LlmTool>? LastTools => RecordedTools.LastOrDefault();
 
     public FakeLlmProvider(IEnumerable<LlmCompletion> scriptedCompletions)
     {
@@ -25,6 +27,7 @@ public sealed class FakeLlmProvider : ILlmProvider
         CancellationToken cancellationToken = default)
     {
         RecordedCalls.Add(messages);
+        RecordedTools.Add(tools);
 
         if (_scriptedCompletions.Count == 0)
         {

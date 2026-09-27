@@ -1,9 +1,18 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { DatabaseProvider, IntrospectResponse, InstanceStatusResponse } from "@/lib/types";
+import type { DatabaseProvider, IntrospectResponse, InstanceStatusResponse, DabStatusInfo } from "@/lib/types";
 import { toEntitySelectionDtos, type PickerSelection } from "@/lib/selection";
-import { generateDabConfig, startDabInstance, getDabInstanceStatus, stopDabInstance, ApiError } from "@/lib/api";
+import {
+  generateDabConfig,
+  startDabInstance,
+  getDabInstanceStatus,
+  stopDabInstance,
+  saveConnection,
+  getDabStatus,
+  installDab,
+  ApiError,
+} from "@/lib/api";
 import InstanceStatusBadge from "@/components/InstanceStatusBadge";
 import QueryView from "@/components/QueryView";
 
@@ -25,17 +34,48 @@ export default function ConfigPreview({ provider, connectionString, schema, sele
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [copied, setCopied] = useState(false);
 
+  const [shouldSave, setShouldSave] = useState(true);
+  const [connectionName, setConnectionName] = useState("");
+
   const [instance, setInstance] = useState<InstanceStatusResponse | null>(null);
   const [isStarting, setIsStarting] = useState(false);
   const [isStopping, setIsStopping] = useState(false);
   const [instanceError, setInstanceError] = useState<string | null>(null);
+  const [dabStatus, setDabStatus] = useState<DabStatusInfo | null>(null);
+  const [isInstallingDab, setIsInstallingDab] = useState(false);
+  const [dabInstallMessage, setDabInstallMessage] = useState<string | null>(null);
   const pollHandle = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
+    checkDabStatus();
     return () => {
       if (pollHandle.current) clearInterval(pollHandle.current);
     };
   }, []);
+
+  async function checkDabStatus() {
+    try {
+      const status = await getDabStatus();
+      setDabStatus(status);
+    } catch {
+      // Ignore if endpoint is unavailable
+    }
+  }
+
+  async function handleInstallDab() {
+    setIsInstallingDab(true);
+    setDabInstallMessage(null);
+    setInstanceError(null);
+    try {
+      const res = await installDab();
+      setDabInstallMessage(res.message || "Microsoft.DataApiBuilder installed successfully!");
+      await checkDabStatus();
+    } catch (err) {
+      setDabInstallMessage(err instanceof ApiError ? err.message : "Failed to install DAB.");
+    } finally {
+      setIsInstallingDab(false);
+    }
+  }
 
   function startPolling(id: string) {
     if (pollHandle.current) clearInterval(pollHandle.current);
@@ -80,6 +120,20 @@ export default function ConfigPreview({ provider, connectionString, schema, sele
     setInstanceError(null);
 
     try {
+      if (shouldSave) {
+        try {
+          await saveConnection({
+            name: connectionName.trim() || undefined,
+            provider,
+            connectionString,
+            configJson,
+            connectionStringEnvVarName: envVarName.trim() || "ZQ_DB_CONN",
+          });
+        } catch {
+          // If saving fails (e.g. storage disabled), don't block instance start
+        }
+      }
+
       const started = await startDabInstance({
         configJson,
         connectionStringEnvVarName: envVarName.trim() || "ZQ_DB_CONN",
@@ -227,9 +281,58 @@ export default function ConfigPreview({ provider, connectionString, schema, sele
                 {instance && <InstanceStatusBadge status={instance.status} />}
               </div>
 
+              {dabStatus && !dabStatus.isInstalled && (
+                <div className="flex flex-col gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-200">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-semibold text-amber-300">Microsoft Data API builder (dab) is not installed</span>
+                    <button
+                      type="button"
+                      onClick={handleInstallDab}
+                      disabled={isInstallingDab}
+                      className="rounded bg-teal px-3 py-1 text-xs font-semibold text-bg hover:opacity-90 disabled:opacity-50"
+                    >
+                      {isInstallingDab ? "Installing DAB..." : "Install DAB CLI"}
+                    </button>
+                  </div>
+                  <p className="text-muted">
+                    ZeroQuery uses the official Microsoft Data API builder (<code className="text-text font-mono">dab</code>) CLI to serve your database via MCP. Run <code className="text-text font-mono">dotnet tool install -g Microsoft.DataApiBuilder</code> or click Install above.
+                  </p>
+                  {dabInstallMessage && (
+                    <div className="mt-1 font-mono text-[11px] text-text whitespace-pre-wrap rounded bg-bg p-2 border border-border">
+                      {dabInstallMessage}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {dabStatus && dabStatus.isInstalled && (
+                <div className="flex items-center gap-1.5 text-xs text-muted">
+                  <span className="text-teal font-medium">✓</span>
+                  <span>DAB CLI ready: <code className="font-mono text-text">{dabStatus.version || "installed"}</code></span>
+                </div>
+              )}
+
               {instanceError && (
-                <div className="rounded-md border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger">
-                  {instanceError}
+                <div className="flex flex-col gap-2 rounded-md border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger">
+                  <div>{instanceError}</div>
+                  {(instanceError.toLowerCase().includes("dab") || instanceError.toLowerCase().includes("not find the file") || instanceError.toLowerCase().includes("not installed")) && (
+                    <div className="flex flex-wrap items-center gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={handleInstallDab}
+                        disabled={isInstallingDab}
+                        className="rounded bg-teal px-3 py-1 text-xs font-semibold text-bg hover:opacity-90 disabled:opacity-50"
+                      >
+                        {isInstallingDab ? "Installing DAB..." : "Install DAB CLI"}
+                      </button>
+                      <span className="text-xs text-muted">or run: <code className="font-mono text-text">dotnet tool install -g Microsoft.DataApiBuilder</code></span>
+                    </div>
+                  )}
+                  {dabInstallMessage && (
+                    <div className="mt-1 font-mono text-xs text-text whitespace-pre-wrap rounded bg-bg p-2 border border-border">
+                      {dabInstallMessage}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -243,6 +346,29 @@ export default function ConfigPreview({ provider, connectionString, schema, sele
                 <p className="text-xs text-muted">
                   Serving at <code className="font-mono text-text">{instance.baseUrl}</code>
                 </p>
+              )}
+
+              {(!instance || instance.status === "Stopped" || instance.status === "Error") && (
+                <div className="flex flex-col gap-2 rounded-md border border-border/80 bg-surface2/30 p-3">
+                  <label className="flex items-center gap-2 text-xs font-medium text-text cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={shouldSave}
+                      onChange={(e) => setShouldSave(e.target.checked)}
+                      className="h-3.5 w-3.5 rounded border-border text-teal focus:ring-teal"
+                    />
+                    Save this connection profile for future return visits
+                  </label>
+                  {shouldSave && (
+                    <input
+                      type="text"
+                      placeholder={`Connection name (e.g. My ${provider} Database)`}
+                      value={connectionName}
+                      onChange={(e) => setConnectionName(e.target.value)}
+                      className="rounded-md border border-border bg-bg px-2.5 py-1.5 text-xs text-text focus:border-teal focus:outline-none"
+                    />
+                  )}
+                </div>
               )}
 
               <div className="flex gap-2">
