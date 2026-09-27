@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/backend/">
+    <Project Path="backend/Zeroquery.Api/Zeroquery.Api.csproj" />
+    <Project Path="backend/Zeroquery.Core/Zeroquery.Core.csproj" />
+    <Project Path="backend/Zeroquery.Tests/Zeroquery.Tests.csproj" />
+  </Folder>
+</Solution>
