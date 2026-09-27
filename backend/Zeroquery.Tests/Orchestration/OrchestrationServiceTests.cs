@@ -398,4 +398,81 @@ public class OrchestrationServiceTests
         Assert.DoesNotContain(toolsPassedToLlm, t => t.Name == "update_record");
         Assert.DoesNotContain(toolsPassedToLlm, t => t.Name == "delete_record");
     }
+
+    [Fact]
+    public async Task RunQueryAsync_ParsesChart_WithStringColumnsAndTolerantChartType()
+    {
+        var mcpClient = new FakeMcpClient(SampleTools, new());
+        var llmProvider = new FakeLlmProvider(new[]
+        {
+            new LlmCompletion(null, new[]
+            {
+                new LlmToolCall(
+                    "call-1",
+                    "render_result",
+                    """
+                    {
+                      "type": "chart",
+                      "title": "Monthly Volume",
+                      "chartType": "column",
+                      "columns": ["Month", "Volume"],
+                      "rows": [
+                        { "Month": "Jan 1997", "Volume": 45 },
+                        { "Month": "Feb 1997", "Volume": 52 }
+                      ],
+                      "meta": { "sourceEntity": "Orders" }
+                    }
+                    """)
+            })
+        });
+
+        var service = CreateService(llmProvider, mcpClient);
+        var result = await service.RunQueryAsync("http://localhost:9999", "Plot monthly order volume as a bar chart");
+
+        Assert.Equal(UiSpecType.Chart, result.Type);
+        Assert.Equal(UiSpecChartType.Bar, result.ChartType);
+        Assert.Equal(2, result.Columns.Count);
+        Assert.Equal("Month", result.Columns[0].Key);
+        Assert.Equal(2, result.Rows.Count);
+    }
+
+    [Fact]
+    public async Task RunQueryAsync_GeneratesFallbackUiSpec_WhenDataRetrievedBeforeMaxIterations()
+    {
+        var mcpClient = new FakeMcpClient(SampleTools, new()
+        {
+            ["aggregate_records"] = new McpToolCallResult(false, """
+                {
+                  "entity": "Orders",
+                  "result": {
+                    "items": [
+                      { "ShipCountry": "USA", "count": 122 },
+                      { "ShipCountry": "Germany", "count": 122 }
+                    ]
+                  }
+                }
+                """)
+        });
+
+        // Simulates an LLM that retrieves data on turn 1, but loops on turn 2 without calling render_result
+        var completions = new[]
+        {
+            new LlmCompletion(null, new[] { new LlmToolCall("call-1", "aggregate_records", "{}") }),
+            new LlmCompletion(null, new[] { new LlmToolCall("call-2", "aggregate_records", "{}") })
+        };
+
+        var llmProvider = new FakeLlmProvider(completions);
+        var service = new OrchestrationService(
+            llmProvider,
+            new FakeMcpClientFactory(mcpClient),
+            Options.Create(new OrchestrationOptions { MaxToolCallIterations = 2 }));
+
+        var result = await service.RunQueryAsync("http://localhost:9999", "Plot orders by country as a bar chart");
+
+        Assert.Equal(UiSpecType.Chart, result.Type);
+        Assert.Equal(UiSpecChartType.Bar, result.ChartType);
+        Assert.Equal(2, result.Rows.Count);
+        Assert.Equal("Orders", result.Meta.SourceEntity);
+    }
 }
+

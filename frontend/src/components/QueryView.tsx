@@ -239,87 +239,280 @@ function TableRenderer({ spec }: { spec: UiSpecResponse }) {
 }
 
 /**
- * Renders "chart" UiSpecs with Recharts. First column is treated as the category/label axis,
- * every other numeric column becomes its own series/slice — a deliberately simple, generic
- * mapping since the LLM only emits the fixed UiSpec shape (key/label columns + row data), not
- * chart-library-specific config (doc/Plan.md Section 5 — "no arbitrary rendering").
+ * Helper to look up a property on a row object case-insensitively, handling LLMs that
+ * produce column keys in lowercase and row properties in PascalCase (or vice-versa).
  */
-function ChartRenderer({ spec }: { spec: UiSpecResponse }) {
-  const columns = resolveColumns(spec);
-  if (columns.length === 0) {
-    return <p className="text-sm text-muted">Chart result has no columns to plot.</p>;
+function getRowValue(row: Record<string, unknown>, key: string): unknown {
+  if (key in row) return row[key];
+  const lowerKey = key.toLowerCase();
+  for (const [k, v] of Object.entries(row)) {
+    if (k.toLowerCase() === lowerKey) return v;
+  }
+  return undefined;
+}
+
+/**
+ * Robust numeric parser that handles real numbers, numbers in strings, and numbers with
+ * currencies/commas/units (e.g. "$1,250.00" -> 1250, "45 orders" -> 45).
+ */
+function parseNumeric(val: unknown): number {
+  if (typeof val === "number") return isNaN(val) ? 0 : val;
+  if (typeof val === "string") {
+    // Avoid parsing ISO dates like 1996-07-04 as numbers
+    if (/^\d{4}-\d{2}/.test(val)) return 0;
+    const cleaned = val.replace(/[^0-9.-]+/g, "");
+    if (!cleaned) return 0;
+    const parsed = parseFloat(cleaned);
+    return isNaN(parsed) ? 0 : parsed;
+  }
+  return 0;
+}
+
+/** Formats dates and category timestamps into clean, human-readable labels. */
+function formatCategoryLabel(value: unknown): string {
+  if (value == null) return "—";
+  const str = String(value);
+
+  // Match ISO timestamps e.g. 1996-07-04T00:00:00 or 1996-07-04
+  if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
+    const d = new Date(str);
+    if (!isNaN(d.getTime())) {
+      const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      return `${months[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+    }
+    return str.substring(0, 10);
   }
 
-  const [categoryColumn, ...seriesColumns] = columns;
-  const data = spec.rows.map((row) => {
-    const mapped: Record<string, string | number> = { [categoryColumn.key]: String(row[categoryColumn.key] ?? "") };
-    for (const col of seriesColumns) {
-      const raw = row[col.key];
-      mapped[col.key] = typeof raw === "number" ? raw : Number(raw) || 0;
+  // Match YYYY-MM
+  if (/^\d{4}-\d{2}$/.test(str)) {
+    const [y, m] = str.split("-");
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const mIdx = parseInt(m, 10) - 1;
+    if (mIdx >= 0 && mIdx < 12) {
+      return `${months[mIdx]} ${y}`;
+    }
+  }
+
+  return str;
+}
+
+/**
+ * Renders "chart" UiSpecs with Recharts with interactive Bar, Line, Pie, and Table view toggles.
+ * Features smart column categorization (detects string category vs numeric metrics),
+ * case-insensitive property lookup, and numeric cleaning.
+ */
+function ChartRenderer({ spec }: { spec: UiSpecResponse }) {
+  const [activeType, setActiveType] = useState<"Bar" | "Line" | "Pie" | "Table">(
+    spec.chartType === "Line" ? "Line" : spec.chartType === "Pie" ? "Pie" : "Bar"
+  );
+
+  const rawColumns = resolveColumns(spec);
+  if (rawColumns.length === 0 || spec.rows.length === 0) {
+    return <p className="text-sm text-muted">No data rows available to plot.</p>;
+  }
+
+  // Intelligently classify which column is Category and which are Series metrics
+  let categoryCol = rawColumns[0];
+  let seriesCols = rawColumns.slice(1);
+
+  if (rawColumns.length >= 2) {
+    // Check if column 0 looks numeric while column 1 looks textual/categorical
+    const sample = spec.rows.slice(0, 5);
+    const col0IsNum = sample.some((r) => typeof getRowValue(r, rawColumns[0].key) === "number");
+    const col1IsNum = sample.some((r) => typeof getRowValue(r, rawColumns[1].key) === "number");
+
+    if (col0IsNum && !col1IsNum && rawColumns.length === 2) {
+      // Invert: category is col 1, series is col 0
+      categoryCol = rawColumns[1];
+      seriesCols = [rawColumns[0]];
+    }
+  } else if (rawColumns.length === 1) {
+    // Only 1 column provided (e.g. LLM just sent counts)
+    categoryCol = { key: "__idx", label: "#" };
+    seriesCols = [rawColumns[0]];
+  }
+
+  // Map rows with case-insensitive and numeric cleaning
+  const data = spec.rows.map((row, idx) => {
+    const rawCat = categoryCol.key === "__idx" ? `#${idx + 1}` : getRowValue(row, categoryCol.key);
+    const mapped: Record<string, string | number> = {
+      [categoryCol.key]: formatCategoryLabel(rawCat),
+    };
+    for (const col of seriesCols) {
+      mapped[col.key] = parseNumeric(getRowValue(row, col.key));
     }
     return mapped;
   });
 
-  const chartType = spec.chartType ?? "Bar";
-
-  if (chartType === "Pie") {
-    const valueColumn = seriesColumns[0];
-    if (!valueColumn) {
-      return <p className="text-sm text-muted">Pie charts need at least one numeric column.</p>;
-    }
-    return (
-      <div className="h-72 w-full">
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie
-              data={data}
-              dataKey={valueColumn.key}
-              nameKey={categoryColumn.key}
-              cx="50%"
-              cy="50%"
-              outerRadius="80%"
-              label={(props: PieLabelRenderProps) => String(props.name ?? "")}
-            >
-              {data.map((_, i) => (
-                <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
-              ))}
-            </Pie>
-            <Tooltip contentStyle={{ background: "var(--surface)", border: "1px solid var(--border)", fontSize: 12 }} />
-            <Legend wrapperStyle={{ fontSize: 12 }} />
-          </PieChart>
-        </ResponsiveContainer>
-      </div>
-    );
-  }
-
-  const ChartComponent = chartType === "Line" ? LineChart : BarChart;
-
   return (
-    <div className="h-72 w-full">
-      <ResponsiveContainer width="100%" height="100%">
-        <ChartComponent data={data} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
-          <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" />
-          <XAxis dataKey={categoryColumn.key} stroke="var(--muted)" fontSize={12} tickLine={false} />
-          <YAxis stroke="var(--muted)" fontSize={12} tickLine={false} />
-          <Tooltip contentStyle={{ background: "var(--surface)", border: "1px solid var(--border)", fontSize: 12 }} />
-          {seriesColumns.length > 1 && <Legend wrapperStyle={{ fontSize: 12 }} />}
-          {seriesColumns.map((col, i) =>
-            chartType === "Line" ? (
-              <Line
-                key={col.key}
-                type="monotone"
-                dataKey={col.key}
-                name={col.label}
-                stroke={CHART_COLORS[i % CHART_COLORS.length]}
-                strokeWidth={2}
-                dot={false}
-              />
-            ) : (
-              <Bar key={col.key} dataKey={col.key} name={col.label} fill={CHART_COLORS[i % CHART_COLORS.length]} radius={[3, 3, 0, 0]} />
-            )
+    <div className="flex flex-col gap-2 rounded-md border border-border/80 bg-surface/50 p-3">
+      {/* Chart Toolbar */}
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-2">
+        <div className="flex items-center gap-2 text-xs text-muted">
+          <span className="font-semibold text-text">{spec.rows.length}</span> data points
+          <span>·</span>
+          <span>Axis: <strong className="text-text">{categoryCol.label}</strong></span>
+          {seriesCols.length > 0 && (
+            <>
+              <span>·</span>
+              <span>Metric: <strong className="text-text">{seriesCols.map((c) => c.label).join(", ")}</strong></span>
+            </>
           )}
-        </ChartComponent>
-      </ResponsiveContainer>
+        </div>
+
+        {/* View Switcher: Bar | Line | Pie | Table */}
+        <div className="inline-flex rounded-md border border-border bg-surface2/60 p-0.5 text-xs">
+          <button
+            type="button"
+            onClick={() => setActiveType("Bar")}
+            className={`rounded px-2.5 py-1 transition-colors ${
+              activeType === "Bar" ? "bg-teal font-semibold text-bg shadow-sm" : "text-muted hover:text-text"
+            }`}
+          >
+            📊 Bar
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveType("Line")}
+            className={`rounded px-2.5 py-1 transition-colors ${
+              activeType === "Line" ? "bg-teal font-semibold text-bg shadow-sm" : "text-muted hover:text-text"
+            }`}
+          >
+            📈 Line
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveType("Pie")}
+            className={`rounded px-2.5 py-1 transition-colors ${
+              activeType === "Pie" ? "bg-teal font-semibold text-bg shadow-sm" : "text-muted hover:text-text"
+            }`}
+          >
+            🥧 Pie
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveType("Table")}
+            className={`rounded px-2.5 py-1 transition-colors ${
+              activeType === "Table" ? "bg-teal font-semibold text-bg shadow-sm" : "text-muted hover:text-text"
+            }`}
+          >
+            📋 Table
+          </button>
+        </div>
+      </div>
+
+      {activeType === "Table" ? (
+        <TableRenderer spec={spec} />
+      ) : activeType === "Pie" ? (
+        <div className="h-72 w-full min-w-0">
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie
+                data={data}
+                dataKey={seriesCols[0]?.key ?? categoryCol.key}
+                nameKey={categoryCol.key}
+                cx="50%"
+                cy="50%"
+                outerRadius="75%"
+                label={(props: PieLabelRenderProps) => String(props.name ?? "")}
+              >
+                {data.map((_, i) => (
+                  <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                ))}
+              </Pie>
+              <Tooltip
+                contentStyle={{
+                  background: "var(--surface)",
+                  border: "1px solid var(--border)",
+                  borderRadius: "0.375rem",
+                  fontSize: 12,
+                  color: "var(--text)",
+                }}
+                formatter={(val: unknown) => [typeof val === "number" ? val.toLocaleString() : String(val), ""]}
+              />
+              <Legend wrapperStyle={{ fontSize: 12 }} />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+      ) : (
+        <div className="h-72 w-full min-w-0">
+          <ResponsiveContainer width="100%" height="100%">
+            {activeType === "Line" ? (
+              <LineChart data={data} margin={{ top: 12, right: 12, left: 0, bottom: data.length > 5 ? 20 : 8 }}>
+                <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" />
+                <XAxis
+                  dataKey={categoryCol.key}
+                  stroke="var(--muted)"
+                  fontSize={11}
+                  tickLine={false}
+                  interval={data.length > 15 ? "preserveStartEnd" : 0}
+                  angle={data.length > 5 ? -25 : 0}
+                  textAnchor={data.length > 5 ? "end" : "middle"}
+                  height={data.length > 5 ? 45 : 30}
+                />
+                <YAxis stroke="var(--muted)" fontSize={11} tickLine={false} />
+                <Tooltip
+                  contentStyle={{
+                    background: "var(--surface)",
+                    border: "1px solid var(--border)",
+                    borderRadius: "0.375rem",
+                    fontSize: 12,
+                    color: "var(--text)",
+                  }}
+                  formatter={(val: unknown) => [typeof val === "number" ? val.toLocaleString() : String(val), ""]}
+                />
+                {seriesCols.length > 1 && <Legend wrapperStyle={{ fontSize: 12 }} />}
+                {seriesCols.map((col, i) => (
+                  <Line
+                    key={col.key}
+                    type="monotone"
+                    dataKey={col.key}
+                    name={col.label}
+                    stroke={CHART_COLORS[i % CHART_COLORS.length]}
+                    strokeWidth={2.5}
+                    dot={{ r: 3, fill: CHART_COLORS[i % CHART_COLORS.length] }}
+                  />
+                ))}
+              </LineChart>
+            ) : (
+              <BarChart data={data} margin={{ top: 12, right: 12, left: 0, bottom: data.length > 5 ? 20 : 8 }}>
+                <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" />
+                <XAxis
+                  dataKey={categoryCol.key}
+                  stroke="var(--muted)"
+                  fontSize={11}
+                  tickLine={false}
+                  interval={data.length > 15 ? "preserveStartEnd" : 0}
+                  angle={data.length > 5 ? -25 : 0}
+                  textAnchor={data.length > 5 ? "end" : "middle"}
+                  height={data.length > 5 ? 45 : 30}
+                />
+                <YAxis stroke="var(--muted)" fontSize={11} tickLine={false} />
+                <Tooltip
+                  contentStyle={{
+                    background: "var(--surface)",
+                    border: "1px solid var(--border)",
+                    borderRadius: "0.375rem",
+                    fontSize: 12,
+                    color: "var(--text)",
+                  }}
+                  formatter={(val: unknown) => [typeof val === "number" ? val.toLocaleString() : String(val), ""]}
+                />
+                {seriesCols.length > 1 && <Legend wrapperStyle={{ fontSize: 12 }} />}
+                {seriesCols.map((col, i) => (
+                  <Bar
+                    key={col.key}
+                    dataKey={col.key}
+                    name={col.label}
+                    fill={CHART_COLORS[i % CHART_COLORS.length]}
+                    radius={[4, 4, 0, 0]}
+                  />
+                ))}
+              </BarChart>
+            )}
+          </ResponsiveContainer>
+        </div>
+      )}
     </div>
   );
 }

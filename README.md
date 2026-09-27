@@ -8,19 +8,23 @@
 [![Next.js 16](https://img.shields.io/badge/Next.js-16.3-black?logo=next.js&logoColor=white)](https://nextjs.org/)
 [![Microsoft Data API Builder](https://img.shields.io/badge/DAB-2.0.12-0078D4?logo=microsoftazure&logoColor=white)](https://github.com/Azure/data-api-builder)
 [![Model Context Protocol](https://img.shields.io/badge/MCP-Protocol-6366F1?logo=anthropic&logoColor=white)](https://modelcontextprotocol.io/)
-[![Tests](https://img.shields.io/badge/Tests-129%20Passing-22c55e?logo=github-actions&logoColor=white)](#-testing)
+[![Tests](https://img.shields.io/badge/Tests-137%20Passing-22c55e?logo=github-actions&logoColor=white)](#-testing)
 [![Docker Ready](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker&logoColor=white)](#-docker-quickstart)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 <p align="center">
   <a href="#-key-features">Key Features</a> •
-  <a href="#-architecture">Architecture</a> •
+  <a href="#-visual-walkthrough">Visual Tour</a> •
   <a href="#-dynamic-ui-specs">Dynamic UI</a> •
+  <a href="#-architecture">Architecture</a> •
   <a href="#-docker-quickstart">Docker Quickstart</a> •
   <a href="#-local-development">Local Setup</a> •
   <a href="#-recommended-llm-models">Recommended Models</a> •
-  <a href="#-security-architecture">Security</a> •
-  <a href="#-contributing">Contributing</a>
+  <a href="#-security-architecture">Security</a>
+</p>
+
+<p align="center">
+  <img src="doc/screenshots/10.png" alt="Zeroquery Interactive Chart & UI Spec Demo" width="920" style="border-radius: 8px; border: 1px solid #30363d;" />
 </p>
 
 </div>
@@ -98,17 +102,111 @@ flowchart TB
 
 ---
 
-## 📊 Dynamic UI Specs
+## 📸 Visual Walkthrough
+
+Zeroquery guides users from a raw database connection string to a running AI application in under 60 seconds:
+
+### Step 1: Connect Any Database & Introspect Schema
+Paste your connection string (SQL Server, LocalDB, PostgreSQL, MySQL). Zeroquery connects securely, tests connectivity, and introspects table schemas without reading raw data. Saved connection profiles can be reconnected with one click.
+
+<p align="center">
+  <img src="doc/screenshots/1.png" alt="Step 1: Connect a database and view saved profiles" width="900" style="border-radius: 6px; border: 1px solid #30363d;" />
+</p>
+
+### Step 2: Choose Entities & Configure Permissions
+Pick which tables and views the AI is allowed to query. Opt-in to granular write operations (`Create`, `Update`, `Delete`) per entity, and add natural language descriptions to guide the LLM's query planner.
+
+<p align="center">
+  <img src="doc/screenshots/2.png" alt="Step 2: Table and permission picker" width="900" style="border-radius: 6px; border: 1px solid #30363d;" />
+</p>
+
+### Step 3: Configure DAB Runtime & Endpoints
+Configure connection string environment variable bindings (`ZQ_DB_CONN`) and optionally enable REST (`/api`) and GraphQL (`/graphql`) endpoints alongside SQL MCP.
+
+<p align="center">
+  <img src="doc/screenshots/3.png" alt="Step 3: DAB Runtime Endpoints" width="900" style="border-radius: 6px; border: 1px solid #30363d;" />
+</p>
+
+### Step 4: Validate & Save Connection Profile
+Preview the compiled, schema-validated `dab-config.json`. Copy or download the config, save your connection profile for future visits, and click **Start DAB instance** to spawn an isolated child process managed by Zeroquery.
+
+<p align="center">
+  <img src="doc/screenshots/4.png" alt="Step 4: Generate dab-config.json and start instance" width="900" style="border-radius: 6px; border: 1px solid #30363d;" />
+</p>
+
+### Step 5: Live DAB Gateway & Natural Language Querying
+The instance launches on an isolated port with live endpoint browsing (`/api`, `/graphql`, `/healthz`). You can immediately start asking conversational questions in natural language.
+
+<p align="center">
+  <img src="doc/screenshots/5.png" alt="Step 5: Live DAB instance with REST and GraphQL browse buttons" width="900" style="border-radius: 6px; border: 1px solid #30363d;" />
+</p>
+
+---
+
+## 📊 Dynamic UI Specs in Action
 
 Zeroquery does not rely on fragile LLM-authored HTML or unstructured markdown tables. The orchestrator instructs the model to call a synthetic tool: **`render_result`** with a typed **`UiSpec`** payload:
 
 | UI Spec Type | Trigger Pattern | Rendered Interface |
 | :--- | :--- | :--- |
-| **`Table`** | *"List all active suppliers in London"* | Responsive tabular data grid with column headers, formatted cells, and entity metadata. |
-| **`Chart`** | *"Plot monthly order volume as a bar chart"* | Dynamic **Recharts** visualization (Bar, Line, or Pie) using curated theme color tokens. |
-| **`Card`** | *"Show details for Customer ALFKI"* | Two-column attribute key-value inspector for single-record examination. |
+| **`Chart`** | *"Plot monthly order volume as a bar chart"* | Dynamic **Recharts** visualization (Bar, Line, or Pie) with interactive view switchers (`[Bar] [Line] [Pie] [Table]`), date bucketing, and tooltips. |
+| **`Table`** | *"List all active Employees"* | Responsive tabular data grid with column headers, formatted cells, and entity metadata. |
 | **`Stat`** | *"What was our total revenue in 1997?"* | Big numeric metric callout card with primary stat value and descriptive label. |
+| **`Card`** | *"Show details for Customer ALFKI"* | Two-column attribute key-value inspector for single-record examination. |
 | **`Form`** | *"Update unit price of Chai from $18 to $21"* | Interactive diff view showing previous vs proposed values with an explicit confirmation checkbox. |
+
+### 📈 Interactive Charts (Bar, Line, Pie & Table Views)
+Ask for volume, trends, distributions, or categorical breakdowns. Zeroquery automatically classifies categories and numeric series, formats date buckets (e.g. `Jul 1996 - May 1998`), and provides interactive view toggles:
+
+**Bar Chart View ("Plot monthly order volume as a bar chart"):**
+<p align="center">
+  <img src="doc/screenshots/10.png" alt="Bar Chart UI Spec with Monthly Order Volume" width="900" style="border-radius: 6px; border: 1px solid #30363d;" />
+</p>
+
+**Pie Chart View ("Plot Revenue by category as a Piechart"):**
+<p align="center">
+  <img src="doc/screenshots/11.png" alt="Pie Chart UI Spec with Revenue by Category" width="900" style="border-radius: 6px; border: 1px solid #30363d;" />
+</p>
+
+---
+
+### 📋 Tabular Data Grids
+Multi-row datasets formatted with column headers, monospace values, and entity provenance:
+
+**Table View ("List all active Employees"):**
+<p align="center">
+  <img src="doc/screenshots/6.png" alt="Table UI Spec showing active employees" width="900" style="border-radius: 6px; border: 1px solid #30363d;" />
+</p>
+
+---
+
+### 🔍 Single-Record Inspection
+Detailed attribute inspection for specific entity records and customer details:
+
+**Record Details View ("Show details for Customer ALFKI"):**
+<p align="center">
+  <img src="doc/screenshots/7.png" alt="Customer Details view" width="900" style="border-radius: 6px; border: 1px solid #30363d;" />
+</p>
+
+---
+
+### 💡 High-Impact Stat / KPI Cards
+Large numeric badges for executive totals, counts, and financial figures:
+
+**Stat Card ("What was our total revenue in 1997?"):**
+<p align="center">
+  <img src="doc/screenshots/8.png" alt="Stat UI Spec with Total Revenue in 1997" width="900" style="border-radius: 6px; border: 1px solid #30363d;" />
+</p>
+
+---
+
+### 🛡️ Human-in-the-Loop Mutation Forms
+Zeroquery enforces strict safety boundaries: autonomous database writes are completely disabled. When a modification is requested, Zeroquery generates an interactive diff proposal. The user can review the proposed changes, edit values directly in the UI, and must explicitly check the confirmation box before any database mutation is sent:
+
+**Mutation Confirmation Form ("Update unit price of Chai from $18 to $21"):**
+<p align="center">
+  <img src="doc/screenshots/9.png" alt="Form UI Spec with Human-in-the-Loop Confirmation" width="900" style="border-radius: 6px; border: 1px solid #30363d;" />
+</p>
 
 ---
 
@@ -192,7 +290,7 @@ All settings can be configured via environment variables or `appsettings.json`:
 | :--- | :--- | :--- |
 | `OPENROUTER_API_KEY` | *(empty)* | OpenRouter API key (can also be saved via the in-app UI). |
 | `LLM_MODEL_ID` | `openrouter/auto` | The target model identifier. |
-| `Orchestration__MaxToolCallIterations` | `5` | Maximum autonomous tool-calling iterations per user prompt. |
+| `Orchestration__MaxToolCallIterations` | `10` | Maximum autonomous tool-calling iterations per user prompt. |
 
 ### Persistence & Storage
 
@@ -241,7 +339,7 @@ dotnet test backend/Zeroquery.Tests
 ```
 
 ```
-Passed! - Failed: 0, Passed: 129, Skipped: 0, Total: 129
+Passed! - Failed: 0, Passed: 137, Skipped: 0, Total: 137
 ```
 
 ---
@@ -264,7 +362,7 @@ ZeroQuery/
 │   │   ├── Security/           # SSRF validator, Data Protection encryption
 │   │   ├── Mcp/                # Streamable-HTTP MCP JSON-RPC client
 │   │   └── Orchestration/      # Tool-calling loop, OpenRouter LLM, UiSpec model
-│   └── Zeroquery.Tests/        # 129 Unit & Integration tests
+│   └── Zeroquery.Tests/        # 137 Unit & Integration tests
 ├── frontend/
 │   ├── src/app/                # Next.js App Router root layout & page
 │   ├── src/components/         # DynamicRenderer, TablePicker, FormView, Recharts

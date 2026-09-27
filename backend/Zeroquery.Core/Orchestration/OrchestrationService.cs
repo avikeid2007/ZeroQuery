@@ -1,5 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Zeroquery.Core.Mcp;
 
@@ -32,17 +34,20 @@ public sealed class OrchestrationService
     private readonly IMcpClientFactory _mcpClientFactory;
     private readonly OrchestrationOptions _options;
     private readonly ILlmSettingsStore? _settingsStore;
+    private readonly ILogger<OrchestrationService> _logger;
 
     public OrchestrationService(
         ILlmProvider llmProvider,
         IMcpClientFactory mcpClientFactory,
         IOptions<OrchestrationOptions> options,
-        ILlmSettingsStore? settingsStore = null)
+        ILlmSettingsStore? settingsStore = null,
+        ILogger<OrchestrationService>? logger = null)
     {
         _llmProvider = llmProvider;
         _mcpClientFactory = mcpClientFactory;
         _options = options.Value;
         _settingsStore = settingsStore;
+        _logger = logger ?? NullLogger<OrchestrationService>.Instance;
     }
 
     /// <summary>
@@ -79,8 +84,19 @@ public sealed class OrchestrationService
             LlmMessage.User(userPrompt)
         };
 
+        string? lastSuccessfulToolResult = null;
+        string? lastToolName = null;
+
         for (var iteration = 0; iteration < _options.MaxToolCallIterations; iteration++)
         {
+            if (iteration == _options.MaxToolCallIterations - 1)
+            {
+                // We are on the final allowed iteration! Nudge the model firmly to call render_result now.
+                _logger.LogWarning("LLM reached iteration {Iteration} of {Max}. Emitting final render_result nudge.", iteration + 1, _options.MaxToolCallIterations);
+                messages.Add(LlmMessage.User(
+                    $"WARNING: You are on your final tool iteration (iteration {iteration + 1} of {_options.MaxToolCallIterations}). You MUST call '{RenderResultToolName}' now with your best data or summary. Do NOT call any more data tools."));
+            }
+
             await ReportAsync(onProgress, OrchestrationStage.Thinking, null, cancellationToken).ConfigureAwait(false);
             var completion = await _llmProvider.CompleteAsync(messages, llmTools, cancellationToken).ConfigureAwait(false);
 
@@ -108,7 +124,26 @@ public sealed class OrchestrationService
                 await ReportAsync(onProgress, OrchestrationStage.ToolCall, toolCall.Name, cancellationToken).ConfigureAwait(false);
                 var resultJson = await ExecuteMcpToolCallAsync(mcpClient, toolCall, cancellationToken).ConfigureAwait(false);
                 await ReportAsync(onProgress, OrchestrationStage.ToolResult, toolCall.Name, cancellationToken).ConfigureAwait(false);
+
+                if (!resultJson.Contains("\"status\":\"error\"") && !resultJson.Contains("\"isError\":true"))
+                {
+                    lastSuccessfulToolResult = resultJson;
+                    lastToolName = toolCall.Name;
+                }
+
                 messages.Add(LlmMessage.ToolResult(toolCall.Id, resultJson));
+            }
+        }
+
+        // If iteration limit was hit, attempt to synthesize a fallback UiSpec if we retrieved data
+        if (lastSuccessfulToolResult is not null)
+        {
+            var fallbackSpec = TryBuildFallbackUiSpec(lastSuccessfulToolResult, lastToolName, userPrompt);
+            if (fallbackSpec is not null)
+            {
+                _logger.LogInformation("Built fallback UiSpec from last tool result '{ToolName}'.", lastToolName);
+                await ReportAsync(onProgress, OrchestrationStage.Rendering, null, cancellationToken).ConfigureAwait(false);
+                return fallbackSpec;
             }
         }
 
@@ -179,12 +214,13 @@ public sealed class OrchestrationService
     private const string RenderResultDescription =
         "Call this exactly once, as your final step, to return the answer to the user. Do not " +
         "respond in plain text — always finish by calling this tool with the query results " +
-        "formatted for display.";
+        "formatted for display. For type 'chart', provide chartType ('bar', 'line', or 'pie'), " +
+        "category column first, numeric series column(s) second, and rows with numerical values.";
 
     private static readonly JsonNode RenderResultSchema = JsonNode.Parse("""
         {
           "type": "object",
-          "required": ["type", "title", "columns", "rows", "meta"],
+          "required": ["type", "title"],
           "properties": {
             "type": { "type": "string", "enum": ["table", "chart", "card", "stat", "form"] },
             "title": { "type": "string" },
@@ -192,7 +228,6 @@ public sealed class OrchestrationService
               "type": "array",
               "items": {
                 "type": "object",
-                "required": ["key", "label"],
                 "properties": {
                   "key": { "type": "string" },
                   "label": { "type": "string" }
@@ -203,7 +238,6 @@ public sealed class OrchestrationService
             "chartType": { "type": "string", "enum": ["bar", "line", "pie"] },
             "meta": {
               "type": "object",
-              "required": ["sourceEntity"],
               "properties": {
                 "sourceEntity": { "type": "string" }
               }
@@ -252,26 +286,98 @@ public sealed class OrchestrationService
 
         var typeString = root["type"]?.GetValue<string>()
             ?? throw new InvalidOperationException("render_result is missing required 'type'.");
-        var type = Enum.Parse<UiSpecType>(typeString, ignoreCase: true);
+
+        UiSpecType type;
+        if (typeString.Contains("chart", StringComparison.OrdinalIgnoreCase) ||
+            typeString.Contains("graph", StringComparison.OrdinalIgnoreCase) ||
+            typeString.Contains("plot", StringComparison.OrdinalIgnoreCase))
+        {
+            type = UiSpecType.Chart;
+        }
+        else if (typeString.Contains("stat", StringComparison.OrdinalIgnoreCase) ||
+                 typeString.Contains("kpi", StringComparison.OrdinalIgnoreCase) ||
+                 typeString.Contains("metric", StringComparison.OrdinalIgnoreCase))
+        {
+            type = UiSpecType.Stat;
+        }
+        else if (typeString.Contains("card", StringComparison.OrdinalIgnoreCase))
+        {
+            type = UiSpecType.Card;
+        }
+        else if (typeString.Contains("form", StringComparison.OrdinalIgnoreCase) ||
+                 typeString.Contains("mutation", StringComparison.OrdinalIgnoreCase))
+        {
+            type = UiSpecType.Form;
+        }
+        else if (Enum.TryParse<UiSpecType>(typeString, ignoreCase: true, out var parsedType))
+        {
+            type = parsedType;
+        }
+        else
+        {
+            type = UiSpecType.Table;
+        }
 
         var title = root["title"]?.GetValue<string>() ?? "Result";
 
-        var columns = (root["columns"] as JsonArray)?
-            .OfType<JsonObject>()
-            .Select(c => new UiSpecColumn(
-                c["key"]?.GetValue<string>() ?? string.Empty,
-                c["label"]?.GetValue<string>() ?? string.Empty))
-            .ToList() ?? new List<UiSpecColumn>();
+        var columns = new List<UiSpecColumn>();
+        if (root["columns"] is JsonArray colArray)
+        {
+            foreach (var item in colArray)
+            {
+                if (item is JsonObject obj)
+                {
+                    var key = obj["key"]?.GetValue<string>() ?? obj["name"]?.GetValue<string>() ?? string.Empty;
+                    var label = obj["label"]?.GetValue<string>() ?? obj["title"]?.GetValue<string>() ?? key;
+                    columns.Add(new UiSpecColumn(key, label));
+                }
+                else if (item is JsonValue val && val.TryGetValue(out string? strVal))
+                {
+                    columns.Add(new UiSpecColumn(strVal, strVal));
+                }
+            }
+        }
 
         var rows = (root["rows"] as JsonArray)?
             .OfType<JsonObject>()
             .Select(ToRowDictionary)
             .ToList() ?? new List<Dictionary<string, object?>>();
 
+        if (columns.Count == 0 && rows.Count > 0)
+        {
+            columns = rows[0].Keys.Select(k => new UiSpecColumn(k, k)).ToList();
+        }
+
         UiSpecChartType? chartType = null;
         if (root["chartType"]?.GetValue<string>() is { } chartTypeString)
         {
-            chartType = Enum.Parse<UiSpecChartType>(chartTypeString, ignoreCase: true);
+            if (chartTypeString.Contains("bar", StringComparison.OrdinalIgnoreCase) ||
+                chartTypeString.Contains("column", StringComparison.OrdinalIgnoreCase))
+            {
+                chartType = UiSpecChartType.Bar;
+            }
+            else if (chartTypeString.Contains("line", StringComparison.OrdinalIgnoreCase) ||
+                     chartTypeString.Contains("area", StringComparison.OrdinalIgnoreCase))
+            {
+                chartType = UiSpecChartType.Line;
+            }
+            else if (chartTypeString.Contains("pie", StringComparison.OrdinalIgnoreCase) ||
+                     chartTypeString.Contains("donut", StringComparison.OrdinalIgnoreCase))
+            {
+                chartType = UiSpecChartType.Pie;
+            }
+            else if (Enum.TryParse<UiSpecChartType>(chartTypeString, ignoreCase: true, out var parsedChart))
+            {
+                chartType = parsedChart;
+            }
+            else
+            {
+                chartType = UiSpecChartType.Bar;
+            }
+        }
+        else if (type == UiSpecType.Chart)
+        {
+            chartType = UiSpecChartType.Bar;
         }
 
         var sourceEntity = root["meta"]?["sourceEntity"]?.GetValue<string>() ?? string.Empty;
@@ -297,6 +403,75 @@ public sealed class OrchestrationService
         }
 
         return new UiSpec(type, title, columns, rows, chartType, meta, form);
+    }
+
+    private static UiSpec? TryBuildFallbackUiSpec(string toolResultJson, string? toolName, string userPrompt)
+    {
+        try
+        {
+            var node = JsonNode.Parse(toolResultJson);
+            if (node is null) return null;
+
+            JsonArray? rowsArray = null;
+            string sourceEntity = string.Empty;
+
+            if (node is JsonObject obj)
+            {
+                sourceEntity = obj["entity"]?.GetValue<string>() ?? string.Empty;
+
+                if (obj["result"] is JsonObject resObj && resObj["items"] is JsonArray itemsArr)
+                {
+                    rowsArray = itemsArr;
+                }
+                else if (obj["result"] is JsonArray resArr)
+                {
+                    rowsArray = resArr;
+                }
+                else if (obj["value"] is JsonArray valArr)
+                {
+                    rowsArray = valArr;
+                }
+            }
+            else if (node is JsonArray arr)
+            {
+                rowsArray = arr;
+            }
+
+            if (rowsArray is null || rowsArray.Count == 0) return null;
+
+            var rows = rowsArray
+                .OfType<JsonObject>()
+                .Select(ToRowDictionary)
+                .ToList();
+
+            if (rows.Count == 0) return null;
+
+            var columns = rows[0].Keys.Select(k => new UiSpecColumn(k, k)).ToList();
+
+            var isChartQuery = userPrompt.Contains("chart", StringComparison.OrdinalIgnoreCase) ||
+                               userPrompt.Contains("plot", StringComparison.OrdinalIgnoreCase) ||
+                               userPrompt.Contains("bar", StringComparison.OrdinalIgnoreCase) ||
+                               userPrompt.Contains("line", StringComparison.OrdinalIgnoreCase) ||
+                               userPrompt.Contains("pie", StringComparison.OrdinalIgnoreCase) ||
+                               userPrompt.Contains("graph", StringComparison.OrdinalIgnoreCase);
+
+            var type = isChartQuery ? UiSpecType.Chart : UiSpecType.Table;
+            var chartType = isChartQuery ? UiSpecChartType.Bar : (UiSpecChartType?)null;
+
+            var title = userPrompt.Length > 60 ? userPrompt[..60] + "…" : userPrompt;
+
+            return new UiSpec(
+                type,
+                title,
+                columns,
+                rows,
+                chartType,
+                new UiSpecMeta(sourceEntity, DateTimeOffset.UtcNow));
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private static object? ExtractValue(JsonNode? node) => node switch
