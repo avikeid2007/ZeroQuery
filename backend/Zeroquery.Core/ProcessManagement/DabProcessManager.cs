@@ -92,6 +92,26 @@ public sealed class DabProcessManager : IDisposable
             Status = DabInstanceStatus.Provisioning
         };
 
+        try
+        {
+            if (File.Exists(configPath))
+            {
+                var doc = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(configPath));
+                if (doc?["runtime"]?["rest"]?["enabled"] is System.Text.Json.Nodes.JsonNode restNode)
+                {
+                    instance.IsRestEnabled = restNode.GetValue<bool>();
+                }
+                if (doc?["runtime"]?["graphql"]?["enabled"] is System.Text.Json.Nodes.JsonNode gqlNode)
+                {
+                    instance.IsGraphqlEnabled = gqlNode.GetValue<bool>();
+                }
+            }
+        }
+        catch
+        {
+            // Non-fatal, defaults will apply
+        }
+
         if (!_instances.TryAdd(instance.Id, instance))
         {
             // Effectively unreachable (fresh GUID key) but keeps the dictionary contract honest.

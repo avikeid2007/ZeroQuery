@@ -36,10 +36,14 @@ public sealed record EntitySelectionDto(
 /// Zeroquery never writes the raw connection string into the generated file.
 /// </param>
 /// <param name="Entities">Selected tables/views with their column and permission choices.</param>
+/// <param name="EnableRest">Whether to enable DAB REST endpoints.</param>
+/// <param name="EnableGraphQL">Whether to enable DAB GraphQL endpoint.</param>
 public sealed record GenerateConfigRequest(
     DatabaseProvider Provider,
     string ConnectionStringEnvVarName,
-    IReadOnlyList<EntitySelectionDto> Entities);
+    IReadOnlyList<EntitySelectionDto> Entities,
+    bool? EnableRest = true,
+    bool? EnableGraphQL = true);
 
 /// <summary>Response body for POST /api/config/generate.</summary>
 public sealed record GenerateConfigResponse(string ConfigJson, bool IsValid, IReadOnlyList<string> ValidationErrors)

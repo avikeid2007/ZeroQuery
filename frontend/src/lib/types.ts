@@ -69,6 +69,8 @@ export interface GenerateConfigRequest {
   provider: DatabaseProvider;
   connectionStringEnvVarName: string;
   entities: EntitySelectionDto[];
+  enableRest?: boolean;
+  enableGraphQL?: boolean;
 }
 
 export interface GenerateConfigResponse {
@@ -101,6 +103,9 @@ export interface InstanceStatusResponse {
   startedAt: string;
   lastUsedAt: string;
   lastError: string | null;
+  restUrl?: string | null;
+  graphqlUrl?: string | null;
+  healthUrl?: string | null;
 }
 
 export interface DabStatusInfo {
@@ -176,11 +181,14 @@ export interface LlmSettingsResponse {
   modelId: string;
   isApiKeyConfigured: boolean;
   apiKeyMasked: string | null;
+  systemPrompt?: string | null;
+  defaultSystemPrompt?: string;
 }
 
 export interface UpdateLlmSettingsRequest {
   apiKey: string | null;
   modelId: string | null;
+  systemPrompt?: string | null;
 }
 
 // Mirrors backend/Zeroquery.Api/Connections/ConnectionDtos.cs (Phase 7)

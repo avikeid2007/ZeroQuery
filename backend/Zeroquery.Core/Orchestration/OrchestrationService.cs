@@ -31,12 +31,18 @@ public sealed class OrchestrationService
     private readonly ILlmProvider _llmProvider;
     private readonly IMcpClientFactory _mcpClientFactory;
     private readonly OrchestrationOptions _options;
+    private readonly ILlmSettingsStore? _settingsStore;
 
-    public OrchestrationService(ILlmProvider llmProvider, IMcpClientFactory mcpClientFactory, IOptions<OrchestrationOptions> options)
+    public OrchestrationService(
+        ILlmProvider llmProvider,
+        IMcpClientFactory mcpClientFactory,
+        IOptions<OrchestrationOptions> options,
+        ILlmSettingsStore? settingsStore = null)
     {
         _llmProvider = llmProvider;
         _mcpClientFactory = mcpClientFactory;
         _options = options.Value;
+        _settingsStore = settingsStore;
     }
 
     /// <summary>
@@ -69,7 +75,7 @@ public sealed class OrchestrationService
 
         var messages = new List<LlmMessage>
         {
-            LlmMessage.System(BuildSystemPrompt()),
+            LlmMessage.System(ResolveSystemPrompt()),
             LlmMessage.User(userPrompt)
         };
 
@@ -229,21 +235,15 @@ public sealed class OrchestrationService
         }
         """)!;
 
-    private static string BuildSystemPrompt() => """
-        You are Zeroquery's query assistant. You answer questions and prepare database actions using
-        the provided tools.
-        - For questions about data: Always call 'describe_entities' first if you don't already know
-          the exact entity/field names. Use 'read_records' to fetch real data — never guess at data
-          you haven't retrieved. When you have the answer, call 'render_result' exactly once with
-          type 'table', 'chart', 'card', or 'stat'.
-        - For data modification requests (create, update, delete): Direct mutations are forbidden
-          without explicit human confirmation. First inspect the entity with 'describe_entities'
-          or 'read_records' (to find existing values/keys if updating or deleting). Then call
-          'render_result' with type 'form', providing the 'form' object with 'operation'
-          ('create' | 'update' | 'delete'), 'entity', 'primaryKey' (for update/delete), and 'fields'
-          showing previous vs proposed values.
-        - Never respond in plain text — always conclude by calling 'render_result'.
-        """;
+    private string ResolveSystemPrompt()
+    {
+        if (_settingsStore is not null && !string.IsNullOrWhiteSpace(_settingsStore.Current.SystemPrompt))
+        {
+            return _settingsStore.Current.SystemPrompt;
+        }
+
+        return LlmSettingsStore.DefaultSystemPrompt;
+    }
 
     private static UiSpec ParseUiSpec(string argumentsJson)
     {

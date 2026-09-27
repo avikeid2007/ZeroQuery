@@ -28,7 +28,10 @@ public sealed record InstanceStatusResponse(
     string BaseUrl,
     DateTimeOffset StartedAt,
     DateTimeOffset LastUsedAt,
-    string? LastError)
+    string? LastError,
+    string? RestUrl = null,
+    string? GraphqlUrl = null,
+    string? HealthUrl = null)
 {
     public static InstanceStatusResponse From(DabInstance instance, DabInstanceStatus status) => new(
         instance.Id,
@@ -37,5 +40,8 @@ public sealed record InstanceStatusResponse(
         instance.BaseUrl,
         instance.StartedAt,
         instance.LastUsedAt,
-        instance.LastError);
+        instance.LastError,
+        instance.RestUrl,
+        instance.GraphqlUrl,
+        instance.HealthUrl);
 }

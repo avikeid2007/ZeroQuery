@@ -258,4 +258,35 @@ public class DabConfigGeneratorTests
         Assert.Contains("sales_Orders", entityNames);
         Assert.Contains("archive_Orders", entityNames);
     }
+
+    [Theory]
+    [InlineData(true, true)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(false, false)]
+    public void Generate_RespectsEnableRestAndEnableGraphQL(bool enableRest, bool enableGraphQL)
+    {
+        var request = new ConfigGenerationRequest(
+            DatabaseProvider.SqlServer,
+            "ZQ_DB_CONN",
+            new[]
+            {
+                new EntitySelectionRequest(
+                    "dbo", "Products", IsView: false,
+                    Columns: new[] { new ColumnSelectionRequest("Id", Include: true, IsPrimaryKey: true) })
+            },
+            EnableRest: enableRest,
+            EnableGraphQL: enableGraphQL);
+
+        var json = DabConfigGenerator.Generate(request);
+        using var doc = JsonDocument.Parse(json);
+
+        var restEnabled = doc.RootElement.GetProperty("runtime").GetProperty("rest").GetProperty("enabled").GetBoolean();
+        var graphqlEnabled = doc.RootElement.GetProperty("runtime").GetProperty("graphql").GetProperty("enabled").GetBoolean();
+        var mcpEnabled = doc.RootElement.GetProperty("runtime").GetProperty("mcp").GetProperty("enabled").GetBoolean();
+
+        Assert.Equal(enableRest, restEnabled);
+        Assert.Equal(enableGraphQL, graphqlEnabled);
+        Assert.True(mcpEnabled);
+    }
 }

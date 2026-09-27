@@ -37,7 +37,9 @@ public static class GenerateConfigEndpoints
             var coreRequest = new ConfigGenerationRequest(
                 request.Provider,
                 request.ConnectionStringEnvVarName,
-                request.Entities.Select(e => e.ToCoreRequest()).ToList());
+                request.Entities.Select(e => e.ToCoreRequest()).ToList(),
+                request.EnableRest ?? true,
+                request.EnableGraphQL ?? true);
 
             result = service.GenerateAndValidate(coreRequest);
         }

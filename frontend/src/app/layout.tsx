@@ -27,8 +27,24 @@ export default function RootLayout({
   return (
     <html
       lang="en"
+      suppressHydrationWarning
       className={`${plexSans.variable} ${plexMono.variable} h-full antialiased`}
     >
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              try {
+                const saved = localStorage.getItem('zq_theme');
+                const prefersLight = window.matchMedia('(prefers-color-scheme: light)').matches;
+                const theme = saved === 'light' || (!saved && prefersLight) ? 'light' : 'dark';
+                document.documentElement.setAttribute('data-theme', theme);
+                document.documentElement.classList.add(theme);
+              } catch (_) {}
+            `,
+          }}
+        />
+      </head>
       <body className="min-h-full flex flex-col bg-bg font-sans text-text">{children}</body>
     </html>
   );

@@ -55,10 +55,14 @@ public sealed record EntitySelectionRequest(
 /// connection string into the generated config file — see doc/Plan.md Section 3.
 /// </param>
 /// <param name="Entities">Selected tables/views and their column/permission choices.</param>
+/// <param name="EnableRest">Whether to enable DAB's REST endpoint (/api).</param>
+/// <param name="EnableGraphQL">Whether to enable DAB's GraphQL endpoint (/graphql).</param>
 public sealed record ConfigGenerationRequest(
     DatabaseProvider Provider,
     string ConnectionStringEnvVarName,
-    IReadOnlyList<EntitySelectionRequest> Entities);
+    IReadOnlyList<EntitySelectionRequest> Entities,
+    bool EnableRest = true,
+    bool EnableGraphQL = true);
 
 /// <summary>Result of generating (and validating) a dab-config.json.</summary>
 /// <param name="ConfigJson">Pretty-printed JSON text of the generated configuration.</param>

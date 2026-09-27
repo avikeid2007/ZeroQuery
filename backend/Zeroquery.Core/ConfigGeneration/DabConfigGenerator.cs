@@ -50,7 +50,7 @@ public static class DabConfigGenerator
         {
             ["$schema"] = SchemaUrl,
             ["data-source"] = BuildDataSource(request),
-            ["runtime"] = BuildRuntime(),
+            ["runtime"] = BuildRuntime(request),
             ["entities"] = BuildEntities(request.Entities, entityNames)
         };
 
@@ -63,10 +63,10 @@ public static class DabConfigGenerator
         ["connection-string"] = $"@env('{request.ConnectionStringEnvVarName}')"
     };
 
-    private static JsonObject BuildRuntime() => new()
+    private static JsonObject BuildRuntime(ConfigGenerationRequest request) => new()
     {
-        ["rest"] = new JsonObject { ["enabled"] = true },
-        ["graphql"] = new JsonObject { ["enabled"] = true },
+        ["rest"] = new JsonObject { ["enabled"] = request.EnableRest },
+        ["graphql"] = new JsonObject { ["enabled"] = request.EnableGraphQL },
         ["mcp"] = new JsonObject { ["enabled"] = true }
     };
 

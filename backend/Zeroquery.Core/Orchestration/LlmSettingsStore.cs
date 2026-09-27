@@ -10,16 +10,24 @@ namespace Zeroquery.Core.Orchestration;
 /// <summary>Current, possibly runtime-updated LLM provider settings.</summary>
 /// <param name="ApiKey">Raw API key. Never serialize this back to a client — see <see cref="ILlmSettingsStore.GetMasked"/>.</param>
 /// <param name="ModelId">Model id to request from the provider.</param>
-public sealed record LlmSettings(string ApiKey, string ModelId);
+/// <param name="SystemPrompt">Optional custom master system prompt. When null or empty, the default Zeroquery prompt is used.</param>
+public sealed record LlmSettings(string ApiKey, string ModelId, string? SystemPrompt = null);
 
 /// <summary>Safe-to-expose view of <see cref="LlmSettings"/> — the raw key is never included.</summary>
 /// <param name="ModelId">Currently configured model id.</param>
 /// <param name="IsApiKeyConfigured">Whether an API key is currently set (by env var, config, or the settings UI).</param>
 /// <param name="ApiKeyMasked">Last 4 characters of the key (e.g. "••••av3x"), or null if none is configured.</param>
-public sealed record LlmSettingsView(string ModelId, bool IsApiKeyConfigured, string? ApiKeyMasked);
+/// <param name="SystemPrompt">Currently configured custom system prompt, or null if using default.</param>
+/// <param name="DefaultSystemPrompt">Built-in default system prompt for display and resets.</param>
+public sealed record LlmSettingsView(
+    string ModelId,
+    bool IsApiKeyConfigured,
+    string? ApiKeyMasked,
+    string? SystemPrompt,
+    string DefaultSystemPrompt);
 
 /// <summary>
-/// Holds the LLM provider settings (API key, model id) that <see cref="OpenRouterLlmProvider"/>
+/// Holds the LLM provider settings (API key, model id, master prompt) that <see cref="OpenRouterLlmProvider"/>
 /// reads on every call. Seeded at startup from <see cref="OpenRouterOptions"/> (env vars /
 /// appsettings — see doc/Plan.md Section 8), but can be updated at runtime through the
 /// settings UI. When <see cref="PersistenceOptions.IsSaveMode"/> is true, settings persist
@@ -34,14 +42,31 @@ public interface ILlmSettingsStore
 
     /// <summary>
     /// Updates settings. Pass null to leave a field unchanged; pass an empty string for
-    /// <paramref name="apiKey"/> to explicitly clear it.
+    /// <paramref name="apiKey"/> to explicitly clear it. Pass empty string or "__RESET__"
+    /// for <paramref name="systemPrompt"/> to reset to default.
     /// </summary>
-    void Update(string? apiKey, string? modelId);
+    void Update(string? apiKey, string? modelId, string? systemPrompt = null);
 }
 
 public sealed class LlmSettingsStore : ILlmSettingsStore
 {
-    private sealed record PersistedSettings(string? EncryptedApiKey, string? ModelId);
+    public const string DefaultSystemPrompt = """
+        You are Zeroquery's query assistant. You answer questions and prepare database actions using
+        the provided tools.
+        - For questions about data: Always call 'describe_entities' first if you don't already know
+          the exact entity/field names. Use 'read_records' to fetch real data — never guess at data
+          you haven't retrieved. When you have the answer, call 'render_result' exactly once with
+          type 'table', 'chart', 'card', or 'stat'.
+        - For data modification requests (create, update, delete): Direct mutations are forbidden
+          without explicit human confirmation. First inspect the entity with 'describe_entities'
+          or 'read_records' (to find existing values/keys if updating or deleting). Then call
+          'render_result' with type 'form', providing the 'form' object with 'operation'
+          ('create' | 'update' | 'delete'), 'entity', 'primaryKey' (for update/delete), and 'fields'
+          showing previous vs proposed values.
+        - Never respond in plain text — always conclude by calling 'render_result'.
+        """;
+
+    private sealed record PersistedSettings(string? EncryptedApiKey, string? ModelId, string? SystemPrompt = null);
 
     private readonly Lock _lock = new();
     private readonly PersistenceOptions? _persistenceOptions;
@@ -97,6 +122,11 @@ public sealed class LlmSettingsStore : ILlmSettingsStore
                 {
                     _current = _current with { ModelId = modelId };
                 }
+
+                if (!string.IsNullOrWhiteSpace(persisted.SystemPrompt))
+                {
+                    _current = _current with { SystemPrompt = persisted.SystemPrompt };
+                }
             }
         }
         catch (Exception ex)
@@ -121,25 +151,33 @@ public sealed class LlmSettingsStore : ILlmSettingsStore
         var current = Current;
         var isConfigured = !string.IsNullOrWhiteSpace(current.ApiKey);
         var masked = isConfigured ? Mask(current.ApiKey) : null;
-        return new LlmSettingsView(current.ModelId, isConfigured, masked);
+        return new LlmSettingsView(current.ModelId, isConfigured, masked, current.SystemPrompt, DefaultSystemPrompt);
     }
 
-    public void Update(string? apiKey, string? modelId)
+    public void Update(string? apiKey, string? modelId, string? systemPrompt = null)
     {
         lock (_lock)
         {
             var nextApiKey = apiKey ?? _current.ApiKey;
             var nextModelId = string.IsNullOrWhiteSpace(modelId) ? _current.ModelId : modelId;
-            _current = new LlmSettings(nextApiKey, nextModelId);
+            var nextSystemPrompt = systemPrompt switch
+            {
+                null => _current.SystemPrompt,
+                "" => null,
+                "__RESET__" => null,
+                _ => systemPrompt
+            };
+
+            _current = new LlmSettings(nextApiKey, nextModelId, nextSystemPrompt);
 
             if (_persistenceOptions?.IsSaveMode == true && _filePath is not null)
             {
-                SaveToDisk(nextApiKey, nextModelId);
+                SaveToDisk(nextApiKey, nextModelId, nextSystemPrompt);
             }
         }
     }
 
-    private void SaveToDisk(string apiKey, string modelId)
+    private void SaveToDisk(string apiKey, string modelId, string? systemPrompt)
     {
         try
         {
@@ -150,7 +188,7 @@ public sealed class LlmSettingsStore : ILlmSettingsStore
                 ? _protector.Protect(apiKey)
                 : null;
 
-            var persisted = new PersistedSettings(encryptedKey, modelId);
+            var persisted = new PersistedSettings(encryptedKey, modelId, systemPrompt);
             var json = JsonSerializer.Serialize(persisted, new JsonSerializerOptions { WriteIndented = true });
             File.WriteAllText(_filePath, json);
         }

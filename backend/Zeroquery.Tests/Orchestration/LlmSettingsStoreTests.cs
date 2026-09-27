@@ -93,4 +93,31 @@ public class LlmSettingsStoreTests
 
         Assert.Equal("updated/model", store.Current.ModelId);
     }
+
+    [Fact]
+    public void Update_ChangesSystemPrompt_WhenProvided()
+    {
+        var store = CreateStore();
+        Assert.Null(store.Current.SystemPrompt);
+
+        store.Update(apiKey: null, modelId: null, systemPrompt: "Custom prompt here");
+
+        Assert.Equal("Custom prompt here", store.Current.SystemPrompt);
+        Assert.Equal("Custom prompt here", store.GetMasked().SystemPrompt);
+    }
+
+    [Fact]
+    public void Update_ResetsSystemPrompt_WhenEmptyOrResetKeywordProvided()
+    {
+        var store = CreateStore();
+        store.Update(apiKey: null, modelId: null, systemPrompt: "Custom prompt");
+        Assert.Equal("Custom prompt", store.Current.SystemPrompt);
+
+        store.Update(apiKey: null, modelId: null, systemPrompt: "");
+        Assert.Null(store.Current.SystemPrompt);
+
+        store.Update(apiKey: null, modelId: null, systemPrompt: "Another prompt");
+        store.Update(apiKey: null, modelId: null, systemPrompt: "__RESET__");
+        Assert.Null(store.Current.SystemPrompt);
+    }
 }

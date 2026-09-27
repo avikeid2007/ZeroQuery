@@ -37,4 +37,19 @@ public sealed class DabInstance
 
     /// <summary>Base URL of the running instance, e.g. "http://localhost:5551".</summary>
     public string BaseUrl => $"http://localhost:{Port}";
+
+    /// <summary>Whether DAB REST endpoints (/api) are enabled.</summary>
+    public bool IsRestEnabled { get; set; } = true;
+
+    /// <summary>Whether DAB GraphQL endpoint (/graphql) is enabled.</summary>
+    public bool IsGraphqlEnabled { get; set; } = true;
+
+    /// <summary>REST API endpoint URL if enabled, otherwise null.</summary>
+    public string? RestUrl => IsRestEnabled ? $"{BaseUrl}/api" : null;
+
+    /// <summary>GraphQL endpoint URL if enabled, otherwise null.</summary>
+    public string? GraphqlUrl => IsGraphqlEnabled ? $"{BaseUrl}/graphql" : null;
+
+    /// <summary>Health check endpoint URL for DAB.</summary>
+    public string HealthUrl => $"{BaseUrl}/healthz";
 }

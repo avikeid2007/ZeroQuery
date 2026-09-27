@@ -44,6 +44,8 @@ export default function ConfigPreview({ provider, connectionString, schema, sele
   const [dabStatus, setDabStatus] = useState<DabStatusInfo | null>(null);
   const [isInstallingDab, setIsInstallingDab] = useState(false);
   const [dabInstallMessage, setDabInstallMessage] = useState<string | null>(null);
+  const [enableRest, setEnableRest] = useState(true);
+  const [enableGraphQL, setEnableGraphQL] = useState(true);
   const pollHandle = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -104,6 +106,8 @@ export default function ConfigPreview({ provider, connectionString, schema, sele
         provider,
         connectionStringEnvVarName: envVarName.trim() || "ZQ_DB_CONN",
         entities,
+        enableRest,
+        enableGraphQL,
       });
       setConfigJson(result.configJson);
       setValidationErrors(result.validationErrors);
@@ -207,6 +211,36 @@ export default function ConfigPreview({ provider, connectionString, schema, sele
           Set this variable to your connection string before running <code className="rounded bg-surface2 px-1 py-0.5">dab start</code>.
         </span>
       </label>
+
+      {/* REST & GraphQL Options */}
+      <div className="flex flex-col gap-2 rounded-md border border-border bg-surface2/30 p-3">
+        <span className="text-xs font-semibold text-text">DAB Runtime Endpoints</span>
+        <p className="text-xs text-muted">
+          Choose which additional endpoints Microsoft Data API builder will expose alongside SQL MCP:
+        </p>
+        <div className="flex flex-wrap gap-4 pt-1">
+          <label className="flex items-center gap-2 text-xs font-medium text-text cursor-pointer">
+            <input
+              type="checkbox"
+              checked={enableRest}
+              onChange={(e) => setEnableRest(e.target.checked)}
+              disabled={isLoading}
+              className="h-3.5 w-3.5 rounded border-border text-teal focus:ring-teal"
+            />
+            <span>Enable REST API (<code className="font-mono text-[11px] text-muted">/api</code>)</span>
+          </label>
+          <label className="flex items-center gap-2 text-xs font-medium text-text cursor-pointer">
+            <input
+              type="checkbox"
+              checked={enableGraphQL}
+              onChange={(e) => setEnableGraphQL(e.target.checked)}
+              disabled={isLoading}
+              className="h-3.5 w-3.5 rounded border-border text-teal focus:ring-teal"
+            />
+            <span>Enable GraphQL API (<code className="font-mono text-[11px] text-muted">/graphql</code>)</span>
+          </label>
+        </div>
+      </div>
 
       {errorMessage && (
         <div className="rounded-md border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger">
@@ -343,9 +377,69 @@ export default function ConfigPreview({ provider, connectionString, schema, sele
               )}
 
               {instance && (instance.status === "Running" || instance.status === "Idle") && (
-                <p className="text-xs text-muted">
-                  Serving at <code className="font-mono text-text">{instance.baseUrl}</code>
-                </p>
+                <div className="flex flex-col gap-2 rounded-md border border-border/80 bg-surface2/30 p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="h-2 w-2 rounded-full bg-teal animate-pulse" />
+                      <span className="text-xs font-semibold text-text">DAB Server Online</span>
+                      <code className="rounded bg-bg px-2 py-0.5 font-mono text-xs text-teal border border-border">
+                        {instance.baseUrl}
+                      </code>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border/50">
+                    {instance.restUrl ? (
+                      <a
+                        href={instance.restUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs font-medium text-text hover:border-teal hover:text-teal transition-all shadow-xs"
+                        title="Browse REST API in a new browser tab"
+                      >
+                        <span>🌐 REST API</span>
+                        <span className="font-mono text-[11px] text-muted">{instance.restUrl}</span>
+                        <span className="text-[10px] text-teal">↗</span>
+                      </a>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 rounded-md border border-border/40 bg-surface/40 px-2.5 py-1.5 text-xs text-muted">
+                        <span>🌐 REST API</span>
+                        <span className="text-[10px] italic">Disabled</span>
+                      </span>
+                    )}
+
+                    {instance.graphqlUrl ? (
+                      <a
+                        href={instance.graphqlUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs font-medium text-text hover:border-teal hover:text-teal transition-all shadow-xs"
+                        title="Open interactive GraphQL Banana Cake Pop IDE in a new tab"
+                      >
+                        <span>⚡ GraphQL IDE</span>
+                        <span className="font-mono text-[11px] text-muted">{instance.graphqlUrl}</span>
+                        <span className="text-[10px] text-teal">↗</span>
+                      </a>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 rounded-md border border-border/40 bg-surface/40 px-2.5 py-1.5 text-xs text-muted">
+                        <span>⚡ GraphQL IDE</span>
+                        <span className="text-[10px] italic">Disabled</span>
+                      </span>
+                    )}
+
+                    <a
+                      href={instance.healthUrl || `${instance.baseUrl}/healthz`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs font-medium text-text hover:border-teal hover:text-teal transition-all shadow-xs"
+                      title="Check DAB healthz endpoint in a new browser tab"
+                    >
+                      <span>🩺 Health Check</span>
+                      <span className="font-mono text-[11px] text-muted">{instance.healthUrl || `${instance.baseUrl}/healthz`}</span>
+                      <span className="text-[10px] text-teal">↗</span>
+                    </a>
+                  </div>
+                </div>
               )}
 
               {(!instance || instance.status === "Stopped" || instance.status === "Error") && (

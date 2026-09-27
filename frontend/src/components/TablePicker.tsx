@@ -112,12 +112,12 @@ export default function TablePicker({ schema, onBack, onConfirm }: TablePickerPr
           </p>
         </div>
       ) : (
-        <table className="w-full min-w-[36rem] border-collapse text-sm">
+        <table className="w-full min-w-full border-collapse text-sm">
           <thead>
             <tr>
-              <th className="w-6 border-b border-border px-2.5 py-2"></th>
-              <th className="border-b border-border px-2.5 py-2 text-left text-xs font-medium text-muted">table</th>
-              <th className="border-b border-border px-2.5 py-2 text-left text-xs font-medium text-muted">permissions</th>
+              <th className="w-8 border-b border-border px-2.5 py-2"></th>
+              <th className="w-1/4 min-w-[13rem] border-b border-border px-2.5 py-2 text-left text-xs font-medium text-muted">table</th>
+              <th className="w-56 min-w-[12rem] border-b border-border px-2.5 py-2 text-left text-xs font-medium text-muted">permissions</th>
               <th className="border-b border-border px-2.5 py-2 text-left text-xs font-medium text-muted">
                 description agents will use
               </th>

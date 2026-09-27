@@ -8,6 +8,7 @@ import LlmSettingsPanel from "@/components/LlmSettingsPanel";
 import SavedConnectionsList from "@/components/SavedConnectionsList";
 import InstanceStatusBadge from "@/components/InstanceStatusBadge";
 import QueryView from "@/components/QueryView";
+import ThemeToggle from "@/components/ThemeToggle";
 import { introspectDatabase, reconnectSavedConnection, stopDabInstance, getDabInstanceStatus, ApiError } from "@/lib/api";
 import type { DatabaseProvider, IntrospectResponse, SavedConnectionSummary, InstanceStatusResponse } from "@/lib/types";
 import type { PickerSelection } from "@/lib/selection";
@@ -140,11 +141,14 @@ export default function Home() {
   const stepIndex = steps.findIndex((s) => s.key === step);
 
   return (
-    <div className="flex flex-1 flex-col items-center bg-bg px-4 py-8 font-sans sm:px-6">
-      <div className="flex w-full max-w-3xl flex-1 flex-col gap-5">
-        <div className="flex items-baseline gap-2.5">
-          <span className="text-lg font-semibold tracking-tight text-text">Zeroquery</span>
-          <span className="text-sm text-muted">point at a database, get an app</span>
+    <div className="flex flex-1 flex-col items-center bg-bg px-4 py-8 font-sans sm:px-6 lg:px-8">
+      <div className="flex w-full max-w-6xl xl:max-w-7xl 2xl:max-w-[88rem] flex-1 flex-col gap-5">
+        <div className="flex items-center justify-between">
+          <div className="flex items-baseline gap-2.5">
+            <span className="text-lg font-semibold tracking-tight text-text">Zeroquery</span>
+            <span className="text-sm text-muted">point at a database, get an app</span>
+          </div>
+          <ThemeToggle />
         </div>
 
         <LlmSettingsPanel />
@@ -177,6 +181,50 @@ export default function Home() {
               </div>
             </div>
 
+            {/* Quick Browse Buttons for active session */}
+            <div className="flex flex-wrap items-center gap-2 rounded-md border border-border/70 bg-surface2/30 px-3 py-2">
+              <span className="text-xs font-medium text-muted">APIs:</span>
+              {activeSession.instance.restUrl ? (
+                <a
+                  href={activeSession.instance.restUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 rounded border border-border bg-surface px-2.5 py-1 text-xs text-text hover:border-teal hover:text-teal transition-all shadow-xs"
+                  title="Browse REST API in a new browser tab"
+                >
+                  <span>🌐 REST</span>
+                  <span className="font-mono text-[10px] text-muted">{activeSession.instance.restUrl}</span>
+                  <span className="text-[10px] text-teal">↗</span>
+                </a>
+              ) : null}
+
+              {activeSession.instance.graphqlUrl ? (
+                <a
+                  href={activeSession.instance.graphqlUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 rounded border border-border bg-surface px-2.5 py-1 text-xs text-text hover:border-teal hover:text-teal transition-all shadow-xs"
+                  title="Open GraphQL IDE in a new browser tab"
+                >
+                  <span>⚡ GraphQL</span>
+                  <span className="font-mono text-[10px] text-muted">{activeSession.instance.graphqlUrl}</span>
+                  <span className="text-[10px] text-teal">↗</span>
+                </a>
+              ) : null}
+
+              <a
+                href={activeSession.instance.healthUrl || `${activeSession.instance.baseUrl}/healthz`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 rounded border border-border bg-surface px-2.5 py-1 text-xs text-text hover:border-teal hover:text-teal transition-all shadow-xs"
+                title="Check DAB healthz endpoint in a new browser tab"
+              >
+                <span>🩺 Health</span>
+                <span className="font-mono text-[10px] text-muted">{activeSession.instance.healthUrl || `${activeSession.instance.baseUrl}/healthz`}</span>
+                <span className="text-[10px] text-teal">↗</span>
+              </a>
+            </div>
+
             <QueryView instanceId={activeSession.instance.id} />
           </div>
         ) : (
@@ -190,7 +238,7 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="grid grid-cols-[136px_minmax(0,1fr)] sm:grid-cols-[136px_minmax(0,1fr)]">
+            <div className="grid grid-cols-[148px_minmax(0,1fr)] sm:grid-cols-[160px_minmax(0,1fr)]">
               <div className="shrink-0 border-r border-border py-4">
                 {steps.map((s, i) => (
                   <div
