@@ -283,7 +283,7 @@ export default function TablePicker({ schema, onBack, onConfirm }: TablePickerPr
         <button
           type="button"
           onClick={onBack}
-          className="rounded-md border border-border px-4 py-2 text-sm font-medium text-text hover:bg-surface2"
+          className="btn-secondary"
         >
           Back
         </button>
@@ -291,7 +291,7 @@ export default function TablePicker({ schema, onBack, onConfirm }: TablePickerPr
           type="button"
           onClick={() => onConfirm(selection)}
           disabled={selectedCount === 0}
-          className="inline-flex items-center justify-center rounded-md bg-teal px-4 py-2 text-sm font-medium text-bg disabled:cursor-not-allowed disabled:opacity-50"
+          className="btn-primary"
         >
           Continue with {selectedCount} table{selectedCount === 1 ? "" : "s"}
         </button>

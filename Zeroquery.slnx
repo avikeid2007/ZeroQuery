@@ -1,7 +1,20 @@
 <Solution>
+  <Configurations>
+    <Platform Name="Any CPU" />
+    <Platform Name="x64" />
+  </Configurations>
   <Folder Name="/backend/">
-    <Project Path="backend/Zeroquery.Api/Zeroquery.Api.csproj" />
-    <Project Path="backend/Zeroquery.Core/Zeroquery.Core.csproj" />
-    <Project Path="backend/Zeroquery.Tests/Zeroquery.Tests.csproj" />
+    <Project Path="backend/Zeroquery.Api/Zeroquery.Api.csproj">
+      <Platform Solution="*|x64" Project="x64" />
+    </Project>
+    <Project Path="backend/Zeroquery.Core/Zeroquery.Core.csproj">
+      <Platform Solution="*|x64" Project="x64" />
+    </Project>
+    <Project Path="backend/Zeroquery.Tests/Zeroquery.Tests.csproj">
+      <Platform Solution="*|x64" Project="x64" />
+    </Project>
   </Folder>
+  <Project Path="Desktop/ZeroQuery.Desktop/ZeroQuery.Desktop.csproj" Id="9d99e8e2-74a3-41c0-8bae-24f21add597a">
+    <Platform Project="x64" />
+  </Project>
 </Solution>

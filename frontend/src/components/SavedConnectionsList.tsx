@@ -91,7 +91,7 @@ export default function SavedConnectionsList({ onSelectReconnect, isReconnecting
                 type="button"
                 onClick={() => setConfirmingConnection(c)}
                 disabled={isReconnectingId === c.id || deletingId === c.id}
-                className="rounded-md bg-teal px-3 py-1.5 text-xs font-medium text-bg hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                className="btn-primary btn-sm"
               >
                 {isReconnectingId === c.id ? "Connecting…" : "Reconnect"}
               </button>
@@ -99,7 +99,7 @@ export default function SavedConnectionsList({ onSelectReconnect, isReconnecting
                 type="button"
                 onClick={() => handleForget(c.id)}
                 disabled={isReconnectingId === c.id || deletingId === c.id}
-                className="rounded-md border border-border px-2.5 py-1.5 text-xs text-muted hover:border-danger/60 hover:text-danger disabled:opacity-50"
+                className="btn-danger btn-sm"
               >
                 {deletingId === c.id ? "…" : "Forget"}
               </button>
@@ -111,17 +111,17 @@ export default function SavedConnectionsList({ onSelectReconnect, isReconnecting
       {/* Explicit Reconnect Confirmation Dialog (doc/Plan.md Section 4 & Phase 7) */}
       {confirmingConnection && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div className="flex w-full max-w-md flex-col gap-4 rounded-lg border border-border bg-surface p-5 shadow-xl">
+          <div className="flex w-full max-w-md flex-col gap-4 rounded-lg border border-[var(--win-border)] bg-[var(--win-card)] p-5 shadow-xl">
             <div>
               <h3 className="text-base font-semibold text-text">Reconnect to database?</h3>
-              <p className="mt-1.5 text-xs leading-relaxed text-muted">
+              <p className="mt-1.5 text-xs leading-relaxed text-[var(--win-text-muted)]">
                 You are about to launch a Data API builder (DAB) SQL MCP subprocess for{" "}
                 <span className="font-semibold text-text">{confirmingConnection.name}</span> (
                 {confirmingConnection.provider}).
               </p>
             </div>
 
-            <div className="rounded-md border border-border bg-bg/50 p-3 text-xs text-muted">
+            <div className="rounded-md border border-[var(--win-border)] bg-[var(--win-bg)] p-3 text-xs text-[var(--win-text-muted)]">
               <p>• Starts a new DAB process on an allocated port</p>
               <p>• Decrypts saved connection string and verifies SSRF policies</p>
               <p>• Zeroquery never reconnects automatically without this confirmation</p>
@@ -131,7 +131,7 @@ export default function SavedConnectionsList({ onSelectReconnect, isReconnecting
               <button
                 type="button"
                 onClick={() => setConfirmingConnection(null)}
-                className="rounded-md border border-border px-3.5 py-2 text-xs font-medium text-muted hover:bg-surface2"
+                className="btn-secondary btn-sm"
               >
                 Cancel
               </button>
@@ -142,7 +142,7 @@ export default function SavedConnectionsList({ onSelectReconnect, isReconnecting
                   setConfirmingConnection(null);
                   onSelectReconnect(target);
                 }}
-                className="rounded-md bg-teal px-4 py-2 text-xs font-medium text-bg hover:opacity-90"
+                className="btn-primary btn-sm"
               >
                 Confirm &amp; Reconnect
               </button>

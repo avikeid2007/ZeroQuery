@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build --webpack",
+    "build:desktop": "next build --webpack && powershell -Command \"Copy-Item -Path out/* -Destination ../Desktop/ZeroQuery.Desktop/wwwroot -Recurse -Force\"",
     "start": "next start",
     "lint": "eslint"
   },

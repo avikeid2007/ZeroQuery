@@ -1,0 +1,840 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ZeroQuery Desktop — WinUI 3 Mock Design</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Segoe+UI+Variable+Text:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --win-bg: #141721;
+    --win-mica: #1a1e2d;
+    --win-sidebar: #131622;
+    --win-card: #202538;
+    --win-card-subtle: #252b40;
+    --win-border: #2e354a;
+    --win-border-light: #3d4661;
+    --win-text: #f0f2f8;
+    --win-text-muted: #9aa2b6;
+    --win-accent: #4fb8a0;
+    --win-accent-glow: rgba(79, 184, 160, 0.25);
+    --win-amber: #e3a64a;
+    --win-danger: #d9756b;
+    --win-blue: #3b82f6;
+    --font-ui: "Segoe UI Variable Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --font-mono: "IBM Plex Mono", Consolas, monospace;
+  }
+
+  [data-theme="light"] {
+    --win-bg: #f4f6fa;
+    --win-mica: #ffffff;
+    --win-sidebar: #ebedf2;
+    --win-card: #ffffff;
+    --win-card-subtle: #f8fafc;
+    --win-border: #d7dbe5;
+    --win-border-light: #c2c8d6;
+    --win-text: #171b26;
+    --win-text-muted: #647087;
+    --win-accent: #0f8b72;
+    --win-accent-glow: rgba(15, 139, 114, 0.2);
+    --win-amber: #b87a14;
+    --win-danger: #c44033;
+    --win-blue: #2563eb;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #090b10;
+    color: var(--win-text);
+    font-family: var(--font-ui);
+    padding: 30px 20px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .meta-bar {
+    width: 1180px;
+    max-width: 96vw;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    font-size: 13px;
+    color: #8b95a8;
+  }
+  .theme-toggle-btn {
+    background: #1f2536;
+    color: #e0e5f2;
+    border: 1px solid #323b52;
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s ease;
+  }
+  .theme-toggle-btn:hover { background: #2c354d; }
+
+  /* Desktop Window Container simulating WinUI 3 Window */
+  .window-container {
+    width: 1180px;
+    max-width: 96vw;
+    height: 780px;
+    background: var(--win-mica);
+    border-radius: 10px;
+    border: 1px solid var(--win-border);
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.3);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+    backdrop-filter: blur(30px);
+  }
+
+  /* WinUI 3 Title Bar */
+  .title-bar {
+    height: 42px;
+    background: var(--win-bg);
+    border-bottom: 1px solid var(--win-border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 0 0 16px;
+    user-select: none;
+    -webkit-app-region: drag;
+  }
+  .app-branding {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .app-icon {
+    width: 22px;
+    height: 22px;
+    background: linear-gradient(135deg, #4fb8a0, #2563eb);
+    border-radius: 5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    color: #fff;
+    box-shadow: 0 2px 6px var(--win-accent-glow);
+  }
+  .app-badge-desktop {
+    background: var(--win-card);
+    border: 1px solid var(--win-border);
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-weight: 500;
+    color: var(--win-accent);
+  }
+
+  .title-breadcrumbs {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--win-text-muted);
+  }
+  .db-status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(79, 184, 160, 0.12);
+    border: 1px solid rgba(79, 184, 160, 0.35);
+    color: var(--win-accent);
+    padding: 3px 10px;
+    border-radius: 14px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 500;
+  }
+  .live-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--win-accent);
+    box-shadow: 0 0 8px var(--win-accent);
+  }
+
+  .caption-buttons {
+    display: flex;
+    height: 100%;
+    -webkit-app-region: no-drag;
+  }
+  .caption-btn {
+    width: 46px;
+    height: 100%;
+    background: transparent;
+    border: none;
+    color: var(--win-text-muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+  .caption-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--win-text);
+  }
+  .caption-btn.close:hover {
+    background: #e81123;
+    color: #fff;
+  }
+
+  /* Main Desktop Body (Sidebar + Content View) */
+  .app-body {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+  }
+
+  /* WinUI 3 Navigation View (Left Rail) */
+  .nav-rail {
+    width: 220px;
+    background: var(--win-sidebar);
+    border-right: 1px solid var(--win-border);
+    display: flex;
+    flex-direction: column;
+    padding: 12px 10px;
+    justify-content: space-between;
+  }
+  .nav-group-title {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--win-text-muted);
+    padding: 8px 12px 6px;
+  }
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 9px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--win-text-muted);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    user-select: none;
+    margin-bottom: 2px;
+    text-decoration: none;
+  }
+  .nav-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--win-text);
+  }
+  .nav-item.active {
+    background: var(--win-card);
+    color: var(--win-text);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+    border-left: 3px solid var(--win-accent);
+  }
+  .nav-icon {
+    font-size: 16px;
+    width: 20px;
+    text-align: center;
+  }
+
+  .nav-bottom-card {
+    background: var(--win-card);
+    border: 1px solid var(--win-border);
+    border-radius: 8px;
+    padding: 12px;
+    font-size: 11.5px;
+  }
+  .worker-status-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+    font-weight: 600;
+  }
+  .worker-specs {
+    font-family: var(--font-mono);
+    color: var(--win-text-muted);
+    font-size: 10.5px;
+    line-height: 1.5;
+  }
+
+  /* Main Workspace */
+  .workspace {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background: var(--win-mica);
+    overflow-y: auto;
+  }
+
+  /* Query Studio View */
+  .query-studio {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 20px 24px;
+    gap: 18px;
+  }
+
+  /* Prompt Header Bar */
+  .prompt-card {
+    background: var(--win-card);
+    border: 1px solid var(--win-border);
+    border-radius: 8px;
+    padding: 14px 18px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.18);
+  }
+  .prompt-input-row {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+  .prompt-input {
+    flex: 1;
+    background: var(--win-bg);
+    border: 1px solid var(--win-border);
+    border-radius: 6px;
+    color: var(--win-text);
+    padding: 11px 14px;
+    font-size: 13.5px;
+    font-family: inherit;
+    outline: none;
+    transition: border 0.15s ease;
+  }
+  .prompt-input:focus {
+    border-color: var(--win-accent);
+    box-shadow: 0 0 0 2px var(--win-accent-glow);
+  }
+  .btn-run {
+    background: var(--win-accent);
+    color: #11141b;
+    font-weight: 600;
+    font-size: 13px;
+    padding: 11px 20px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: transform 0.1s ease, filter 0.15s ease;
+  }
+  .btn-run:hover { filter: brightness(1.1); transform: translateY(-1px); }
+
+  .prompt-meta-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 10px;
+    font-size: 12px;
+    color: var(--win-text-muted);
+  }
+  .model-pill {
+    background: var(--win-bg);
+    border: 1px solid var(--win-border);
+    padding: 3px 9px;
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--win-text);
+  }
+
+  /* Live Reasoning Stream Bar */
+  .reasoning-stream {
+    background: rgba(79, 184, 160, 0.08);
+    border: 1px solid rgba(79, 184, 160, 0.25);
+    border-radius: 6px;
+    padding: 10px 14px;
+    font-size: 12.5px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: var(--font-mono);
+  }
+  .spinner-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--win-accent);
+    animation: pulse 1.2s infinite ease-in-out;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 0.3; transform: scale(0.9); }
+    50% { opacity: 1; transform: scale(1.1); }
+  }
+
+  /* Rendered UI Spec Results */
+  .spec-container {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 16px;
+    flex: 1;
+  }
+  .spec-card {
+    background: var(--win-card);
+    border: 1px solid var(--win-border);
+    border-radius: 8px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+  }
+  .spec-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+  }
+  .spec-title {
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .spec-subtitle {
+    font-size: 11.5px;
+    color: var(--win-text-muted);
+  }
+
+  /* Mock Chart (Recharts visual) */
+  .mock-chart {
+    height: 180px;
+    display: flex;
+    align-items: flex-end;
+    gap: 14px;
+    padding: 10px 8px 0;
+    border-bottom: 1px solid var(--win-border);
+  }
+  .chart-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  }
+  .chart-bar {
+    width: 100%;
+    background: linear-gradient(180deg, var(--win-accent), rgba(79, 184, 160, 0.4));
+    border-radius: 4px 4px 0 0;
+    transition: height 0.3s ease;
+  }
+  .chart-label {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--win-text-muted);
+  }
+
+  /* Mock Data Grid */
+  .table-scroll {
+    overflow-x: auto;
+    margin-top: 14px;
+  }
+  table.desktop-grid {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12.5px;
+  }
+  table.desktop-grid th {
+    text-align: left;
+    padding: 8px 10px;
+    font-size: 11.5px;
+    color: var(--win-text-muted);
+    border-bottom: 1px solid var(--win-border);
+    font-weight: 500;
+  }
+  table.desktop-grid td {
+    padding: 9px 10px;
+    border-bottom: 1px solid var(--win-border);
+    font-family: var(--font-mono);
+    font-size: 12px;
+  }
+  table.desktop-grid tr:hover td {
+    background: rgba(255, 255, 255, 0.03);
+  }
+
+  /* KPI Stat Badges & Mutation Card */
+  .side-specs {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .kpi-box {
+    background: var(--win-card);
+    border: 1px solid var(--win-border);
+    border-radius: 8px;
+    padding: 14px;
+  }
+  .kpi-title { font-size: 11.5px; color: var(--win-text-muted); }
+  .kpi-value { font-size: 26px; font-weight: 700; margin: 4px 0; color: var(--win-text); font-family: var(--font-mono); }
+  .kpi-trend { font-size: 11.5px; color: var(--win-accent); }
+
+  .mutation-card {
+    background: var(--win-card);
+    border: 1px solid var(--win-amber);
+    border-radius: 8px;
+    padding: 14px;
+    font-size: 12.5px;
+  }
+  .mutation-card h4 {
+    color: var(--win-amber);
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+  }
+  .mutation-diff {
+    background: var(--win-bg);
+    border: 1px solid var(--win-border);
+    border-radius: 4px;
+    padding: 8px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    margin: 8px 0;
+  }
+  .diff-del { color: var(--win-danger); }
+  .diff-add { color: var(--win-accent); }
+
+  .mutation-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 10px;
+  }
+  .btn-sm {
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+  }
+  .btn-confirm { background: var(--win-amber); color: #11141b; }
+  .btn-cancel { background: transparent; color: var(--win-text-muted); border: 1px solid var(--win-border); }
+
+  /* Bottom WinUI Status Bar */
+  .status-bar {
+    height: 30px;
+    background: var(--win-bg);
+    border-top: 1px solid var(--win-border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 14px;
+    font-size: 11.5px;
+    color: var(--win-text-muted);
+  }
+  .status-left, .status-right {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .status-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+</style>
+</head>
+<body>
+
+  <div class="meta-bar">
+    <div><strong>⚡ ZeroQuery Dedicated Desktop App</strong> &bull; WinUI 3 (Windows App SDK) + WebView2 Mock Design</div>
+    <button class="theme-toggle-btn" onclick="toggleTheme()">🌓 Toggle Light / Dark</button>
+  </div>
+
+  <!-- Simulated WinUI 3 Window -->
+  <div class="window-container">
+    
+    <!-- WinUI 3 Custom Caption / Title Bar -->
+    <div class="title-bar">
+      <div class="app-branding">
+        <div class="app-icon">⚡</div>
+        <span>ZeroQuery</span>
+        <span class="app-badge-desktop">Desktop</span>
+        <div class="title-breadcrumbs">
+          <span>&rsaquo;</span>
+          <span class="db-status-pill"><span class="live-dot"></span> PostgreSQL: Sales_Analytics_Cluster</span>
+        </div>
+      </div>
+
+      <div class="caption-buttons">
+        <button class="caption-btn" title="Minimize">&#9472;</button>
+        <button class="caption-btn" title="Maximize">&#9633;</button>
+        <button class="caption-btn close" title="Close">&#10005;</button>
+      </div>
+    </div>
+
+    <!-- Main Desktop Body -->
+    <div class="app-body">
+      
+      <!-- WinUI 3 Left Navigation Rail -->
+      <nav class="nav-rail">
+        <div>
+          <div class="nav-group-title">Workspace</div>
+          <a class="nav-item active">
+            <span class="nav-icon">💬</span>
+            <span>Query Studio</span>
+          </a>
+          <a class="nav-item">
+            <span class="nav-icon">🔌</span>
+            <span>Databases</span>
+          </a>
+          <a class="nav-item">
+            <span class="nav-icon">📋</span>
+            <span>Schema Explorer</span>
+          </a>
+          <a class="nav-item">
+            <span class="nav-icon">🛡️</span>
+            <span>Mutation Audit</span>
+          </a>
+
+          <div class="nav-group-title" style="margin-top: 16px;">Preferences</div>
+          <a class="nav-item">
+            <span class="nav-icon">🤖</span>
+            <span>LLM Providers</span>
+          </a>
+          <a class="nav-item">
+            <span class="nav-icon">⚙️</span>
+            <span>Engine & Settings</span>
+          </a>
+        </div>
+
+        <!-- Silent Internal Worker Status Card -->
+        <div class="nav-bottom-card">
+          <div class="worker-status-header">
+            <span>DAB Engine</span>
+            <span style="color: var(--win-accent); font-size: 11px;">● Active</span>
+          </div>
+          <div class="worker-specs">
+            <div>Mode: Bundled Worker</div>
+            <div>PID: 14820 (Win32 Job)</div>
+            <div>IPC: 127.0.0.1:52184</div>
+            <div>RAM: 42 MB / 512 MB</div>
+          </div>
+        </div>
+      </nav>
+
+      <!-- Main Workspace (WebView2 Host) -->
+      <main class="workspace">
+        <div class="query-studio">
+          
+          <!-- Natural Language Prompt Bar -->
+          <div class="prompt-card">
+            <div class="prompt-input-row">
+              <input type="text" class="prompt-input" value="Show top 5 revenue products this quarter and compare against inventory levels" />
+              <button class="btn-run">
+                <span>Query</span>
+                <span style="font-size: 11px; opacity: 0.8;">↵</span>
+              </button>
+            </div>
+            <div class="prompt-meta-row">
+              <div>Press <kbd style="background: var(--win-card-subtle); padding: 1px 5px; border-radius: 3px; font-family: var(--font-mono);">Ctrl + Enter</kbd> to run</div>
+              <div style="display: flex; gap: 8px; align-items: center;">
+                <span>Provider:</span>
+                <span class="model-pill">OpenRouter &bull; Claude 3.7 Sonnet</span>
+                <span style="color: var(--win-accent);">&#10003; In-Process IPC</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Live Orchestration Stream Banner -->
+          <div class="reasoning-stream">
+            <div class="spinner-dot"></div>
+            <span><strong>MCP Loop:</strong> Invoking <code>read_records(table: "OrderDetails", filter: "Quarter=Q1")</code> &bull; Returned 124 rows in 38ms</span>
+          </div>
+
+          <!-- Dynamic UI Spec Render Area -->
+          <div class="spec-container">
+            
+            <!-- Left Column: Chart & Grid -->
+            <div style="display: flex; flex-direction: column; gap: 16px;">
+              
+              <!-- Recharts Dynamic Visualizer -->
+              <div class="spec-card">
+                <div class="spec-header">
+                  <div>
+                    <div class="spec-title">Top Products by Revenue ($)</div>
+                    <div class="spec-subtitle">Auto-rendered by UiSpecType.Chart (Recharts Bar)</div>
+                  </div>
+                  <div class="model-pill">Q1 2026</div>
+                </div>
+
+                <div class="mock-chart">
+                  <div class="chart-col">
+                    <div class="chart-bar" style="height: 145px;"></div>
+                    <div class="chart-label">Server Rack X</div>
+                  </div>
+                  <div class="chart-col">
+                    <div class="chart-bar" style="height: 115px;"></div>
+                    <div class="chart-label">NVMe Array 4T</div>
+                  </div>
+                  <div class="chart-col">
+                    <div class="chart-bar" style="height: 90px;"></div>
+                    <div class="chart-label">Fiber Switch 32p</div>
+                  </div>
+                  <div class="chart-col">
+                    <div class="chart-bar" style="height: 70px;"></div>
+                    <div class="chart-label">Optic Transceiver</div>
+                  </div>
+                  <div class="chart-col">
+                    <div class="chart-bar" style="height: 45px;"></div>
+                    <div class="chart-label">Cat6A Spool 1km</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Interactive Data Grid -->
+              <div class="spec-card">
+                <div class="spec-header">
+                  <div>
+                    <div class="spec-title">Query Results: Products & Inventory</div>
+                    <div class="spec-subtitle">5 records &bull; Source: Products, OrderDetails</div>
+                  </div>
+                  <button class="btn-sm btn-cancel" style="font-size: 11px;">⬇ Export CSV</button>
+                </div>
+
+                <div class="table-scroll">
+                  <table class="desktop-grid">
+                    <thead>
+                      <tr>
+                        <th>Product ID</th>
+                        <th>Name</th>
+                        <th>Category</th>
+                        <th>Unit Price</th>
+                        <th>Units In Stock</th>
+                        <th>Total Revenue</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td>#PRD-1029</td>
+                        <td>Server Rack X-42</td>
+                        <td>Infrastructure</td>
+                        <td>$2,450.00</td>
+                        <td>14</td>
+                        <td>$34,300.00</td>
+                      </tr>
+                      <tr>
+                        <td>#PRD-1088</td>
+                        <td>NVMe Array 4TB</td>
+                        <td>Storage</td>
+                        <td>$1,120.00</td>
+                        <td>38</td>
+                        <td>$22,400.00</td>
+                      </tr>
+                      <tr>
+                        <td>#PRD-1102</td>
+                        <td>Fiber Switch 32p</td>
+                        <td>Networking</td>
+                        <td>$890.00</td>
+                        <td>22</td>
+                        <td>$17,800.00</td>
+                      </tr>
+                      <tr>
+                        <td>#PRD-1145</td>
+                        <td>Optic Transceiver</td>
+                        <td>Networking</td>
+                        <td>$145.00</td>
+                        <td>120</td>
+                        <td>$11,600.00</td>
+                      </tr>
+                      <tr>
+                        <td>#PRD-1201</td>
+                        <td>Cat6A Spool 1km</td>
+                        <td>Cabling</td>
+                        <td>$310.00</td>
+                        <td>65</td>
+                        <td>$9,300.00</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+            </div>
+
+            <!-- Right Column: KPI Badges & Human-Confirmed Mutation Spec -->
+            <div class="side-specs">
+              
+              <div class="kpi-box">
+                <div class="kpi-title">Total Revenue (Q1)</div>
+                <div class="kpi-value">$95,400</div>
+                <div class="kpi-trend">↑ 18.4% vs previous quarter</div>
+              </div>
+
+              <div class="kpi-box">
+                <div class="kpi-title">Low Stock Alert</div>
+                <div class="kpi-value" style="color: var(--win-amber);">1 Item</div>
+                <div class="kpi-title">Server Rack X-42 (14 units remaining)</div>
+              </div>
+
+              <!-- Human-in-the-loop Mutation Form Preview -->
+              <div class="mutation-card">
+                <h4>⚠️ Human Confirmation Required</h4>
+                <p style="color: var(--win-text-muted); font-size: 11.5px;">The AI query planner proposes replenishing low-stock inventory via <code>Update</code> on <code>Products</code>:</p>
+                <div class="mutation-diff">
+                  <div>Target: <code>Products (#PRD-1029)</code></div>
+                  <div class="diff-del">- UnitsInStock: 14</div>
+                  <div class="diff-add">+ UnitsInStock: 50</div>
+                </div>
+                <div class="mutation-actions">
+                  <button class="btn-sm btn-cancel">Decline</button>
+                  <button class="btn-sm btn-confirm">Confirm & Write</button>
+                </div>
+              </div>
+
+            </div>
+
+          </div>
+
+        </div>
+      </main>
+
+    </div>
+
+    <!-- WinUI 3 Bottom Status Bar -->
+    <footer class="status-bar">
+      <div class="status-left">
+        <div class="status-item">
+          <span class="live-dot" style="width: 5px; height: 5px;"></span>
+          <span>ZeroQuery Desktop &bull; Ready</span>
+        </div>
+        <div class="status-item">
+          <span>Target: 127.0.0.1:5432 (Sales_Analytics_Cluster)</span>
+        </div>
+      </div>
+
+      <div class="status-right">
+        <div class="status-item">
+          <span>In-Process IPC (Zero HTTP Ports)</span>
+        </div>
+        <div class="status-item">
+          <span>WinUI 3 &bull; .NET 10</span>
+        </div>
+      </div>
+    </footer>
+
+  </div>
+
+  <script>
+    function toggleTheme() {
+      const html = document.documentElement;
+      const current = html.getAttribute('data-theme');
+      const next = current === 'light' ? 'dark' : 'light';
+      html.setAttribute('data-theme', next);
+    }
+  </script>
+</body>
+</html>

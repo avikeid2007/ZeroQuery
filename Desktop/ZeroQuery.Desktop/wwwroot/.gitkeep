@@ -1,0 +1,1 @@
+# Preserve wwwroot folder in git. Compiled static Next.js assets are copied here by npm run build:desktop

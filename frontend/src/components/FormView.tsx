@@ -254,7 +254,7 @@ export default function FormView({ spec, instanceId, onExecuted, onCancel }: For
                 type="button"
                 onClick={onCancel}
                 disabled={isSubmitting}
-                className="rounded-md border border-border px-3.5 py-1.5 text-xs font-medium text-text hover:bg-surface2 transition-colors"
+                className="btn-secondary btn-sm"
               >
                 Cancel
               </button>
@@ -264,10 +264,8 @@ export default function FormView({ spec, instanceId, onExecuted, onCancel }: For
               type="button"
               onClick={handleExecute}
               disabled={!confirmed || isSubmitting}
-              className={`rounded-md px-4 py-1.5 text-xs font-semibold text-bg transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
-                isDelete
-                  ? "bg-danger hover:bg-danger/90 text-white"
-                  : "bg-teal hover:bg-teal/90 text-bg"
+              className={`btn-sm ${
+                isDelete ? "btn-danger" : "btn-primary"
               }`}
             >
               {isSubmitting

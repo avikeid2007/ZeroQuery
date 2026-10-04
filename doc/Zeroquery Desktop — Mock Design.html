@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Zeroquery Desktop — mock design</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #11141B; --surface: #171B24; --sidebar: #0D1016; --surface2: #20263380;
+    --border: #262C39; --text: #E8EAF0; --muted: #838AA0;
+    --teal: #4FB8A0; --amber: #E3A64A; --danger: #D9756B;
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  html { scroll-padding-top: env(safe-area-inset-top, 0px); height: 100%; }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg: #F4F3EF; --surface: #FFFFFF; --sidebar: #ECEAE4; --surface2: #FFFFFF80;
+      --border: #DCD9D0; --text: #1B1E24; --muted: #6B7180;
+    }
+  }
+  :root[data-theme="dark"] { --bg: #11141B; --surface: #171B24; --sidebar: #0D1016; --border: #262C39; --text: #E8EAF0; --muted: #838AA0; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: 'IBM Plex Sans', system-ui, sans-serif; height: 100%; -webkit-font-smoothing: antialiased; }
+  .mono { font-family: 'IBM Plex Mono', ui-monospace, monospace; }
+
+  .app { display: flex; flex-direction: column; height: 100vh; border: 1px solid var(--border); overflow: hidden; }
+
+  .titlebar {
+    display: flex; align-items: center; padding: 10px 14px;
+    background: var(--sidebar); border-bottom: 1px solid var(--border);
+    padding-top: calc(10px + env(safe-area-inset-top, 0px));
+  }
+  .dots { display: flex; gap: 7px; }
+  .dots span { width: 11px; height: 11px; border-radius: 50%; display: block; }
+  .dots .r { background: #EC6A5E; } .dots .y { background: #F4BF4F; } .dots .g { background: #61C454; }
+  .titlebar .title { flex: 1; text-align: center; font-size: 12.5px; color: var(--muted); margin-right: 46px; }
+
+  .body { display: flex; flex: 1; min-height: 0; }
+
+  .sidebar { width: 230px; background: var(--sidebar); border-right: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; }
+  .sb-section { padding: 14px 14px 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+  .conn { display: flex; align-items: center; gap: 9px; padding: 8px 14px; font-size: 13px; cursor: pointer; border-left: 2px solid transparent; }
+  .conn.active { background: var(--surface2); border-left-color: var(--teal); }
+  .conn .sdot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  .conn .sdot.run { background: var(--teal); }
+  .conn .sdot.idle { background: var(--muted); }
+  .conn .sdot.stop { background: #4A5063; }
+  .conn .name { font-family: 'IBM Plex Mono', monospace; color: var(--text); }
+  .conn .sub { color: var(--muted); font-size: 11px; margin-left: auto; }
+  .conn.add { color: var(--muted); border-left: none; }
+
+  .nav { margin-top: auto; border-top: 1px solid var(--border); padding: 8px 0; }
+  .nitem { padding: 9px 16px; font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 9px; }
+  .nitem.cur { color: var(--text); }
+  .nitem .ic { width: 14px; text-align: center; font-size: 12px; }
+
+  .main { flex: 1; display: flex; flex-direction: column; min-width: 0; background: var(--surface); }
+  .topbar { display: flex; align-items: center; gap: 10px; padding: 12px 20px; border-bottom: 1px solid var(--border); }
+  .status { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; padding: 3px 9px 3px 7px; border-radius: 20px; border: 1px solid var(--border); color: var(--teal); border-color: color-mix(in srgb, var(--teal) 40%, var(--border)); }
+  .status .d2 { width: 6px; height: 6px; border-radius: 50%; background: var(--teal); }
+  .topbar .sep { color: var(--muted); }
+  .topbar .muted { color: var(--muted); font-size: 12.5px; }
+  .btn { font: inherit; font-size: 12.5px; font-weight: 500; color: var(--bg); background: var(--teal); border: none; padding: 7px 13px; border-radius: 5px; cursor: pointer; margin-left: auto; }
+  .btn.ghost { background: transparent; color: var(--text); border: 1px solid var(--border); margin-left: 8px; }
+
+  .promptbar { display: flex; gap: 8px; padding: 14px 20px; border-bottom: 1px solid var(--border); }
+  .input { flex: 1; background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 10px 12px; border-radius: 5px; font-family: 'IBM Plex Mono', monospace; font-size: 13px; }
+
+  .content { padding: 20px; overflow-y: auto; }
+  .content h3 { font-size: 14px; font-weight: 500; margin: 0 0 2px; }
+  .content .meta { color: var(--muted); font-size: 12px; margin-bottom: 14px; }
+  .meta .src { color: var(--amber); }
+
+  table.data { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 24px; }
+  table.data th { text-align: left; color: var(--muted); font-weight: 500; font-size: 12px; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+  table.data td { padding: 8px 10px; border-bottom: 1px solid var(--border); font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; }
+  .badge { display: inline-block; padding: 2px 7px; border-radius: 4px; font-size: 11px; background: var(--surface2); border: 1px solid var(--border); }
+  .badge.ok { color: var(--teal); }
+  .badge.warn { color: var(--amber); }
+
+  .chart { display: flex; align-items: flex-end; gap: 10px; height: 120px; padding: 0 4px; }
+  .chart .col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; max-width: 70px; }
+  .chart .bar-el { width: 100%; background: var(--amber); border-radius: 3px 3px 0 0; }
+  .chart .lbl { font-size: 11px; color: var(--muted); }
+
+  .statusbar { display: flex; align-items: center; gap: 14px; padding: 6px 16px; border-top: 1px solid var(--border); font-size: 11.5px; color: var(--muted); background: var(--sidebar); }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="titlebar">
+    <div class="dots"><span class="r"></span><span class="y"></span><span class="g"></span></div>
+    <div class="title">Zeroquery</div>
+  </div>
+
+  <div class="body">
+    <div class="sidebar">
+      <div class="sb-section">Connections</div>
+      <div class="conn active"><span class="sdot run"></span><span class="name">chip_and_chill</span><span class="sub">:5108</span></div>
+      <div class="conn"><span class="sdot idle"></span><span class="name">inventory_db</span><span class="sub">idle</span></div>
+      <div class="conn"><span class="sdot stop"></span><span class="name">stock_ai_db</span><span class="sub">stopped</span></div>
+      <div class="conn add">+ New connection</div>
+
+      <div class="nav">
+        <div class="nitem cur"><span class="ic">▸</span>Query</div>
+        <div class="nitem"><span class="ic">▤</span>Schema</div>
+        <div class="nitem"><span class="ic">≣</span>Audit Log</div>
+        <div class="nitem"><span class="ic">⚙</span>Settings</div>
+      </div>
+    </div>
+
+    <div class="main">
+      <div class="topbar">
+        <span class="status"><span class="d2"></span>running</span>
+        <span class="mono muted">chip_and_chill</span>
+        <span class="sep">·</span><span class="muted">port 5108</span>
+        <span class="sep">·</span><span class="muted">3 tables, read-only</span>
+        <button class="btn ghost" style="margin-left:auto">Disconnect</button>
+      </div>
+
+      <div class="promptbar">
+        <input class="input" value="which driving ranges are low on range balls this week?">
+        <button class="btn" style="margin-left:0">Ask</button>
+      </div>
+
+      <div class="content">
+        <h3>Low range-ball inventory</h3>
+        <div class="meta">from <span class="src">course_inventory</span> · 4 rows</div>
+        <table class="data">
+          <tr><th>location</th><th>item</th><th>qty</th><th>reorder at</th><th>status</th></tr>
+          <tr><td>Pinehill Range</td><td>range_balls</td><td>140</td><td>200</td><td><span class="badge warn">low</span></td></tr>
+          <tr><td>Oakview Course</td><td>range_balls</td><td>310</td><td>200</td><td><span class="badge ok">ok</span></td></tr>
+          <tr><td>Willow Creek</td><td>range_balls</td><td>85</td><td>200</td><td><span class="badge warn">low</span></td></tr>
+          <tr><td>Birchwood Range</td><td>range_balls</td><td>60</td><td>200</td><td><span class="badge warn">low</span></td></tr>
+        </table>
+
+        <h3>Same data, by location</h3>
+        <div class="meta">rendered as <span class="src">chart</span> alongside the table above</div>
+        <div class="chart">
+          <div class="col"><div class="bar-el" style="height:56px"></div><span class="lbl mono">Pinehill</span></div>
+          <div class="col"><div class="bar-el" style="height:100%;background:var(--teal)"></div><span class="lbl mono">Oakview</span></div>
+          <div class="col"><div class="bar-el" style="height:34px"></div><span class="lbl mono">Willow</span></div>
+          <div class="col"><div class="bar-el" style="height:24px"></div><span class="lbl mono">Birchwood</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="statusbar">
+    <span>3 instances tracked</span>
+    <span>·</span>
+    <span>1 running · 1 idle · 1 stopped</span>
+    <span>·</span>
+    <span>v0.1.0-experimental</span>
+  </div>
+
+</div>
+</body>
+</html>

@@ -1,16 +1,86 @@
-# .NET
-backend/**/bin/
-backend/**/obj/
+# ====================================================================
+# .NET / C# / WinUI 3 Build Outputs & User Files
+# ====================================================================
+[Bb]in/
+[Oo]bj/
+[Aa]pp[Pp]ackages/
+BundleArtifacts/
+Package.StoreAssociation.xml
+_pkginfo.txt
 *.user
+*.userosv
+*.suo
+*.userprefs
+*.sln.docstates
+TestResults/
+Generated Files/
+publish/
 
-# Node / Next.js
-frontend/node_modules/
-frontend/.next/
-frontend/out/
-frontend/.env.local
+# WinUI 3 / AppX / MSIX packaging intermediates
+*.appx
+*.appxbundle
+*.msix
+*.msixbundle
+*.pri
+*.intermediate
 
-# Editor / OS
+# ====================================================================
+# Desktop App wwwroot Build Output (Populated by npm run build:desktop)
+# ====================================================================
+Desktop/**/wwwroot/*
+!Desktop/**/wwwroot/.gitkeep
+
+# ====================================================================
+# Node.js / Next.js
+# ====================================================================
+node_modules/
+**/node_modules/
+**/.next/
+**/out/
+*.tsbuildinfo
+next-env.d.ts
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ====================================================================
+# Environment & Secrets
+# ====================================================================
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# ====================================================================
+# Local Runtime Data & Databases
+# ====================================================================
+data/
+zq_data/
+*.db
+*.sqlite
+*.sqlite3
+audit-log.json
+saved-connections.json
+llm-settings.json
+
+# ====================================================================
+# Editors & IDEs
+# ====================================================================
 .vs/
+.idea/
 .vscode/*
 !.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/tasks.json
+*.DotSettings.user
+
+# ====================================================================
+# Operating System Files
+# ====================================================================
 Thumbs.db
+ehthumbs.db
+[Dd]esktop.ini
+.DS_Store
+.DS_Store?
+._*

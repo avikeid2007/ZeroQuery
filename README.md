@@ -3,22 +3,25 @@
 # ⚡ Zeroquery
 
 ### Point at any database → Auto-generate a scoped MCP server → Query in natural language with a dynamic UI.
+**Available as a native Windows 11 Desktop app (Zero HTTP ports) and a web/Docker stack.**
 
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/download/dotnet/10.0)
+[![WinUI 3](https://img.shields.io/badge/WinUI%203-Windows%2011-0078D4?logo=windows11&logoColor=white)](https://learn.microsoft.com/windows/apps/winui/winui3/)
 [![Next.js 16](https://img.shields.io/badge/Next.js-16.3-black?logo=next.js&logoColor=white)](https://nextjs.org/)
 [![Microsoft Data API Builder](https://img.shields.io/badge/DAB-2.0.12-0078D4?logo=microsoftazure&logoColor=white)](https://github.com/Azure/data-api-builder)
 [![Model Context Protocol](https://img.shields.io/badge/MCP-Protocol-6366F1?logo=anthropic&logoColor=white)](https://modelcontextprotocol.io/)
+[![Zero HTTP Ports](https://img.shields.io/badge/Desktop-Zero%20HTTP%20Ports%20(IPC)-4fb8a0?logo=shield&logoColor=white)](#-desktop-application--in-process-ipc)
 [![Tests](https://img.shields.io/badge/Tests-137%20Passing-22c55e?logo=github-actions&logoColor=white)](#-testing)
 [![Docker Ready](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker&logoColor=white)](#-docker-quickstart)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 <p align="center">
   <a href="#-key-features">Key Features</a> •
+  <a href="#-desktop-application--in-process-ipc">Desktop App</a> •
   <a href="#-visual-walkthrough">Visual Tour</a> •
   <a href="#-dynamic-ui-specs">Dynamic UI</a> •
   <a href="#-architecture">Architecture</a> •
-  <a href="#-docker-quickstart">Docker Quickstart</a> •
-  <a href="#-local-development">Local Setup</a> •
+  <a href="#-quickstart">Quickstart</a> •
   <a href="#-recommended-llm-models">Recommended Models</a> •
   <a href="#-security-architecture">Security</a>
 </p>
@@ -32,7 +35,7 @@
 ---
 
 > [!NOTE]
-> **Experimental OSS Pattern:** Zeroquery explores the *"connect any database → get an isolated, tool-calling AI application"* pattern. It combines Microsoft Data API Builder (DAB) as an isolated SQL MCP subprocess with ASP.NET Core orchestration and Next.js dynamic rendering. See [`doc/Plan.md`](doc/Plan.md) for architectural notes and known trade-offs.
+> **Enterprise-Ready OSS Pattern:** Zeroquery explores the *"connect any database → get an isolated, tool-calling AI application"* pattern. It combines Microsoft Data API Builder (DAB) as an isolated SQL MCP subprocess with .NET 10 orchestration, WinUI 3 native desktop integration, and Next.js dynamic rendering. See [`doc/Plan.md`](doc/Plan.md) for architectural notes and known trade-offs.
 
 ---
 
@@ -44,15 +47,18 @@ Connecting AI models to relational databases typically involves either risky dir
 1. **Introspects** your database schema (SQL Server, LocalDB, PostgreSQL, MySQL) without reading raw data.
 2. Lets you **pick tables, columns, and write operations**, auto-generating natural-language entity descriptions.
 3. Compiles a schema-validated `dab-config.json` and spins up an isolated **Microsoft Data API Builder (DAB)** SQL MCP server on an allocated port.
-4. Orchestrates an **LLM tool-calling loop** over the Model Context Protocol (MCP) and streams live reasoning via Server-Sent Events (SSE).
+4. Orchestrates an **LLM tool-calling loop** over the Model Context Protocol (MCP) and streams live reasoning.
 5. Renders query results into a **dynamically typed UI** (Interactive Tables, Recharts Bar/Line/Pie Graphs, Entity Inspection Cards, Metric Stats, and Human-Confirmed Mutation Forms).
 
 ---
 
 ## ✨ Key Features
 
+- **🖥️ Native WinUI 3 Desktop App**: A Windows 11 desktop experience featuring translucent Mica backdrops, native startup splash loading rings, and zero open HTTP ports.
+- **⚡ In-Process IPC Bridge**: Frontend and .NET backend communicate directly in-memory via WebView2 message dispatching (`chrome.webview.postMessage` ↔ `DesktopIpcDispatcher`) with zero network attack surface.
 - **⚡ Zero-Code MCP Provisioning**: Turns any raw connection string into a running, isolated Model Context Protocol (MCP) server in seconds—no manual JSON authoring or CLI commands required.
-- **💬 Natural Language to Dynamic UI**: Translates conversational questions into real database queries via DAB's `read_records` and `describe_entities` tools, streaming progress live to the browser.
+- **💬 Natural Language to Dynamic UI**: Translates conversational questions into real database queries via DAB's `read_records` and `describe_entities` tools, streaming execution progress live.
+- **⏳ Real-Time Loading & Shimmer Indicators**: Never leaves the user with an empty screen—includes native hardware-accelerated WinUI 3 startup splash rings, live query elapsed timers, and animated CSS shimmer skeletons.
 - **📊 Adaptive UI Spec Components**:
   - **Tables**: Sortable, typed data grid with source entity attribution.
   - **Charts**: Interactive **Recharts** visualizations (Bar, Line, and Pie) styled with curated theme design tokens.
@@ -66,8 +72,42 @@ Connecting AI models to relational databases typically involves either risky dir
   - **OS Resource Limits**: Child processes are bound to Win32 Job Objects with memory caps, CPU quotas, and OS-level `KILL_ON_CLOSE` cleanup.
   - **Rate Limiting**: Tiered IP rate limiting on queries, introspection, instance spawns, and mutations.
   - **Tamper-Evident Audit Trail**: Every write attempt is recorded to an audit log with timestamp, client IP, target entity, operation, and previous vs. proposed values.
-- **💾 Encrypted Persistence & Reconnect**: Save connection profiles across backend restarts. Features an explicit confirmation modal before reconnecting—no silent auto-connections.
-- **🐳 1-Command Docker Stack**: Production-ready multi-stage containers for backend (.NET 10 with pre-installed DAB CLI) and frontend (Next.js with Turbopack).
+- **💾 Encrypted Persistence & Reconnect**: Save connection profiles across restarts with one-click reconnecting and visual progress indicators.
+- **🐳 1-Command Docker Stack**: Production-ready multi-stage containers for backend (.NET 10 with pre-installed DAB CLI) and frontend (Next.js).
+
+---
+
+## 🖥️ Desktop Application (In-Process IPC)
+
+Zeroquery is built as a hybrid desktop application targeting **Windows 11** with WinUI 3:
+
+```
+┌────────────────────────────────────────────────────────┐
+│  ⚡ ZeroQuery Desktop (WinUI 3 + Mica Window)          │
+│                                                        │
+│  ┌──────────────────────────────────────────────────┐  │
+│  │ WebView2 Embedded Client (https://zeroquery.local)│  │
+│  │ (Next.js 16 Static Export + React 19 UI)         │  │
+│  └────────────────────────┬─────────────────────────┘  │
+│                           │ postMessage (JSON)         │
+│                           ▼                            │
+│  ┌──────────────────────────────────────────────────┐  │
+│  │ DesktopIpcDispatcher (C# / .NET 10 In-Process)   │  │
+│  │  • Schema Introspection   • Orchestration Loop   │  │
+│  │  • Data Protection API    • DAB Process Manager  │  │
+│  └──────────────────────────────────────────────────┘  │
+│                           │ Direct Process Control     │
+│                           ▼                            │
+│  ┌──────────────────────────────────────────────────┐  │
+│  │ Sandboxed DAB Child Process (Win32 Job Object)   │  │
+│  └──────────────────────────────────────────────────┘  │
+└────────────────────────────────────────────────────────┘
+```
+
+### Why In-Process IPC?
+1. **Zero Open HTTP Ports**: Unlike traditional desktop wrappers that spin up an HTTP server on `localhost:5000` (exposing local services to rogue browser tabs and local malware), Zeroquery Desktop communicates entirely in-process using WebView2 IPC.
+2. **Virtual Host Mapping**: Web assets are loaded from an isolated virtual domain (`https://zeroquery.local/`) mapped to internal application folders via `SetVirtualHostNameToFolderMapping`.
+3. **Hardware-Accelerated Startup**: Frame-0 native WinUI 3 `LoadingOverlay` with Mica backdrop and active `ProgressRing` provides instantaneous feedback while WebView2 initializes, automatically dismissing once the web app signals `app:ready`.
 
 ---
 
@@ -75,29 +115,39 @@ Connecting AI models to relational databases typically involves either risky dir
 
 ```mermaid
 flowchart TB
-    subgraph Setup["1. Setup Flow (One-Time per Database)"]
-        U1["User pastes Connection String"] --> INTRO["Schema Introspector\n(Lightweight Metadata Query)"]
-        INTRO --> PICK["Table & Column Picker\n(Select Entities + Opt-in Write Permissions)"]
-        PICK --> GEN["Config Generator\n(Compiles valid dab-config.json)"]
-        GEN --> PROV["DAB Process Manager\n(Spawns isolated `dab start` on free port)"]
+    subgraph UI["1. User Interface"]
+        DESK["WinUI 3 Desktop App\n(Mica + In-Process WebView2)"]
+        WEB["Next.js Web Browser\n(http://localhost:3000)"]
     end
 
-    subgraph Query["2. Query Flow (Every Prompt)"]
-        U2["User Prompt\n('Show top 5 products by price as a chart')"] --> FE["Frontend (Next.js)"]
-        FE -- "POST /query/stream (SSE)" --> API["ASP.NET Core Orchestrator"]
-        API <--> LLM["LLM (OpenRouter / OpenAI-Compatible)"]
-        LLM -- "Tool Call (`read_records`)" --> API
-        API -- "JSON-RPC via MCP" --> DABI["DAB SQL MCP Server\n(Assigned Port)"]
-        DABI -- "SQL Query" --> DB[("Target Database\nSQL Server / Postgres / MySQL")]
-        DB -- "Result Set" --> DABI
-        DABI -- "Structured Data" --> API
-        API -- "Tool Result" --> LLM
-        LLM -- "Call synthetic `render_result(UiSpec)`" --> API
-        API -- "SSE Stream (`UiSpec` JSON)" --> FE
-        FE --> RENDERER["Dynamic UI Spec Renderer\n(Table / Chart / Card / Stat / Form)"]
+    subgraph Bridge["2. Transport & Dispatcher"]
+        IPC["In-Process IPC Dispatcher\n(Zero HTTP Ports / postMessage)"]
+        HTTP["ASP.NET Core Minimal API\n(HTTP / SSE Stream :5000)"]
     end
 
-    PROV -. "Registers port & health status" .-> API
+    subgraph Core["3. Zeroquery.Core Engine (.NET 10)"]
+        INTRO["Schema Introspector\n(SQL Server / Postgres / MySQL)"]
+        CONFIG["DAB Config Generator\n(Schema Validation)"]
+        PROC["DAB Process Manager\n(Win32 Job Objects / Sandboxing)"]
+        ORCH["LLM Orchestration Loop\n(OpenRouter / Tool-Calling)"]
+        AUDIT["Mutation Audit & Data Protection\n(AES-256 / Human-in-the-Loop)"]
+    end
+
+    subgraph DAB["4. Isolated DAB Process"]
+        MCP["Model Context Protocol (MCP) Server\n(read_records / describe_entities)"]
+    end
+
+    subgraph TargetDB["5. Database"]
+        DB[("SQL Server / PostgreSQL / MySQL")]
+    end
+
+    DESK <-->|"In-Process IPC"| IPC
+    WEB <-->|"HTTP / SSE"| HTTP
+    IPC --> Core
+    HTTP --> Core
+    ORCH <-->|"JSON-RPC via MCP"| MCP
+    MCP <-->|"Direct SQL"| DB
+    PROC -. "Manages Process Lifecycle" .-> DAB
 ```
 
 ---
@@ -210,12 +260,40 @@ Zeroquery enforces strict safety boundaries: autonomous database writes are comp
 
 ---
 
-## 🐳 Docker Quickstart
+## 🚀 Quickstart Guide
 
-The fastest way to run Zeroquery with all dependencies pre-configured:
+Zeroquery offers multiple deployment options: run as a native Windows 11 desktop app (100% in-process IPC with zero open HTTP ports), launch with Docker Compose, or develop locally.
+
+### Option 1: Native Windows 11 Desktop App (Recommended)
+
+The desktop edition runs fully in-process—no web servers, no open localhost ports, with native Mica translucent styling:
+
+```powershell
+# 1. Clone the repository
+git clone https://github.com/avikeid2007/ZeroQuery.git
+cd ZeroQuery
+
+# 2. Build and export Next.js static client into desktop wwwroot
+cd frontend
+npm install
+npm run build:desktop
+cd ..
+
+# 3. Launch the WinUI 3 Desktop Application
+dotnet run --project Desktop/ZeroQuery.Desktop -p:Platform=x64
+```
+
+> [!TIP]
+> ZeroQuery Desktop automatically provisions Microsoft Data API Builder in a sandboxed Win32 Job Object and maps web assets to `https://zeroquery.local/`.
+
+---
+
+### Option 2: 1-Command Docker Stack
+
+The fastest way to deploy the web-based multi-container stack:
 
 ```bash
-# 1. Clone the repository
+# 1. Clone repository
 git clone https://github.com/avikeid2007/ZeroQuery.git
 cd ZeroQuery
 
@@ -230,34 +308,32 @@ docker compose up -d
 - **Backend API & DAB Host**: [http://localhost:5000](http://localhost:5000)
 - **Persisted Encrypted Data**: Automatically stored in the `zeroquery_data` Docker volume.
 
-To stop the containers:
+To stop the stack:
 ```bash
 docker compose down
 ```
 
 ---
 
-## 💻 Local Development
+### Option 3: Local Development (Web + API)
 
-### Prerequisites
+For developing the ASP.NET Core backend and Next.js frontend independently:
 
+#### Prerequisites
 - [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
 - [Node.js 20+](https://nodejs.org/) and `npm`
 - [Microsoft Data API Builder (DAB) CLI](https://learn.microsoft.com/azure/data-api-builder/):
   ```bash
   dotnet tool install -g Microsoft.DataApiBuilder
   ```
-  *(Note: Zeroquery also includes an automated 1-click installer directly inside the web UI if DAB is missing).*
 
-### 1. Run the Backend API
-
+#### 1. Run the Backend API
 ```powershell
 dotnet run --project backend/Zeroquery.Api
 ```
 The backend API initializes on `http://localhost:5000`.
 
-### 2. Run the Next.js Frontend
-
+#### 2. Run the Next.js Frontend
 ```powershell
 cd frontend
 npm install
@@ -348,14 +424,20 @@ Passed! - Failed: 0, Passed: 137, Skipped: 0, Total: 137
 
 ```
 ZeroQuery/
+├── Desktop/
+│   └── ZeroQuery.Desktop/      # WinUI 3 Native Windows 11 App (.NET 10)
+│       ├── Bridge/             # DesktopIpcDispatcher (In-Process WebView2 IPC)
+│       ├── Services/           # DesktopServiceContainer (DI composition root)
+│       ├── MainWindow.xaml     # Mica window, LoadingOverlay splash, WebView2 host
+│       └── wwwroot/            # Bundled Next.js static export (zeroquery.local)
 ├── backend/
-│   ├── Zeroquery.Api/          # ASP.NET Core Minimal APIs (.NET 10)
+│   ├── Zeroquery.Api/          # ASP.NET Core Minimal APIs (.NET 10 Web Host)
 │   │   ├── Introspection/      # POST /api/introspect
 │   │   ├── ConfigGeneration/   # POST /api/config/generate
 │   │   ├── Instances/          # POST /api/instances, status & teardown
 │   │   ├── Query/              # POST /api/instances/{id}/query & /stream (SSE)
 │   │   └── Security/           # Rate limiting & audit endpoints
-│   ├── Zeroquery.Core/         # Business logic & abstractions
+│   ├── Zeroquery.Core/         # Shared business logic & domain engine
 │   │   ├── Introspection/      # SQL Server, PostgreSQL, MySQL schema providers
 │   │   ├── ConfigGeneration/   # DAB configuration builder & validator
 │   │   ├── Process/            # DabProcessManager, port pool, Win32 Job Objects
@@ -365,8 +447,8 @@ ZeroQuery/
 │   └── Zeroquery.Tests/        # 137 Unit & Integration tests
 ├── frontend/
 │   ├── src/app/                # Next.js App Router root layout & page
-│   ├── src/components/         # DynamicRenderer, TablePicker, FormView, Recharts
-│   └── src/lib/                # API client, SSE stream reader, type definitions
+│   ├── src/components/         # DynamicRenderer, TablePicker, FormView, Recharts, ZeroQueryLogo
+│   └── src/lib/                # API client, desktopBridge (WebView2 IPC), types
 ├── docker-compose.yml          # Single-command stack orchestration
 ├── CONTRIBUTING.md             # Developer guidelines, architecture rules, PR flow
 └── LICENSE                     # MIT License

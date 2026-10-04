@@ -140,6 +140,25 @@ public sealed class DabProcessManager : IDisposable
             return _options.DabExecutablePath;
         }
 
+        // 1. Check local application directory (bundled standalone desktop worker)
+        var localDllPath = Path.Combine(AppContext.BaseDirectory, "tools", "dab", "Microsoft.DataApiBuilder.dll");
+        if (File.Exists(localDllPath))
+        {
+            return localDllPath;
+        }
+
+        var localToolPath = Path.Combine(AppContext.BaseDirectory, "tools", "dab", OperatingSystem.IsWindows() ? "dab.exe" : "dab");
+        if (File.Exists(localToolPath))
+        {
+            return localToolPath;
+        }
+
+        var localExePath = Path.Combine(AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "dab.exe" : "dab");
+        if (File.Exists(localExePath))
+        {
+            return localExePath;
+        }
+
         if (string.Equals(_options.DabExecutablePath, "dab", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(_options.DabExecutablePath, "dab.exe", StringComparison.OrdinalIgnoreCase))
         {
@@ -161,11 +180,14 @@ public sealed class DabProcessManager : IDisposable
     private void LaunchProcess(DabInstance instance, IReadOnlyDictionary<string, string> environmentVariables)
     {
         var executablePath = ResolveDabExecutablePath();
+        var isDll = executablePath.EndsWith(".dll", StringComparison.OrdinalIgnoreCase);
 
         var startInfo = new ProcessStartInfo
         {
-            FileName = executablePath,
-            Arguments = $"start --config \"{instance.ConfigPath}\" --no-https-redirect",
+            FileName = isDll ? "dotnet" : executablePath,
+            Arguments = isDll
+                ? $"\"{executablePath}\" start --config \"{instance.ConfigPath}\" --no-https-redirect"
+                : $"start --config \"{instance.ConfigPath}\" --no-https-redirect",
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
@@ -399,12 +421,13 @@ public sealed class DabProcessManager : IDisposable
         var executable = ResolveDabExecutablePath();
         try
         {
+            var isDll = executable.EndsWith(".dll", StringComparison.OrdinalIgnoreCase);
             using var proc = new Process
             {
                 StartInfo = new ProcessStartInfo
                 {
-                    FileName = executable,
-                    Arguments = "--version",
+                    FileName = isDll ? "dotnet" : executable,
+                    Arguments = isDll ? $"\"{executable}\" --version" : "--version",
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
                     UseShellExecute = false,

@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window
+    x:Class="ZeroQuery.Desktop.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:ZeroQuery.Desktop"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+
+    <Window.SystemBackdrop>
+        <MicaBackdrop />
+    </Window.SystemBackdrop>
+
+    <Grid Background="Transparent">
+        <WebView2 x:Name="AppWebView"
+                  HorizontalAlignment="Stretch"
+                  VerticalAlignment="Stretch" />
+
+        <!-- Startup Loading Overlay (visible until WebView2 + Next.js are ready) -->
+        <Grid x:Name="LoadingOverlay"
+              Background="#FF141721"
+              HorizontalAlignment="Stretch"
+              VerticalAlignment="Stretch">
+            <StackPanel HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Spacing="18">
+                <!-- App Logo Squircle with Gradient -->
+                <Border Width="64"
+                        Height="64"
+                        CornerRadius="16"
+                        BorderThickness="1"
+                        BorderBrush="#33FFFFFF"
+                        HorizontalAlignment="Center">
+                    <Border.Background>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                            <GradientStop Color="#FF4FB8A0" Offset="0.0" />
+                            <GradientStop Color="#FF38BDF8" Offset="0.55" />
+                            <GradientStop Color="#FF2563EB" Offset="1.0" />
+                        </LinearGradientBrush>
+                    </Border.Background>
+                    <TextBlock Text="⚡"
+                               FontSize="30"
+                               Foreground="White"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center" />
+                </Border>
+
+                <!-- Brand Title & Tagline -->
+                <StackPanel Spacing="4" HorizontalAlignment="Center">
+                    <TextBlock Text="ZeroQuery Desktop"
+                               FontSize="18"
+                               FontWeight="SemiBold"
+                               Foreground="#FFF0F3F8"
+                               HorizontalAlignment="Center" />
+                    <TextBlock Text="Point at a database, get an app."
+                               FontSize="12"
+                               Foreground="#FF8B949E"
+                               HorizontalAlignment="Center" />
+                </StackPanel>
+
+                <!-- Native WinUI 3 ProgressRing -->
+                <ProgressRing x:Name="StartupProgressRing"
+                              IsActive="True"
+                              Width="32"
+                              Height="32"
+                              Foreground="#FF4FB8A0"
+                              HorizontalAlignment="Center"
+                              Margin="0,8,0,0" />
+
+                <!-- Status Text -->
+                <TextBlock x:Name="LoadingStatusText"
+                           Text="Starting ZeroQuery Desktop…"
+                           FontSize="12"
+                           Foreground="#FF9AA2B6"
+                           HorizontalAlignment="Center" />
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Window>
