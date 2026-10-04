@@ -105,7 +105,7 @@ jobs:
         run: |
           $outDir = "Desktop/ZeroQuery.Desktop/AppPackages"
           Write-Host "Scanning $outDir for generated packages..."
-          $msixFiles = Get-ChildItem -Path $outDir -Recurse -Filter "*.msix" | Where-Object { $_.DirectoryName -notmatch "Debug" }
+          $msixFiles = Get-ChildItem -Path $outDir -Recurse -Filter "ZeroQuery*.msix" | Where-Object { $_.FullName -notmatch "Debug" }
           
           foreach ($file in $msixFiles) {
               $baseName = [System.IO.Path]::GetFileNameWithoutExtension($file.Name)
@@ -116,7 +116,7 @@ jobs:
               }
           }
           
-          Write-Host "`nGenerated Store packages in $outDir:"
+          Write-Host "Generated Store packages in: $outDir"
           Get-ChildItem -Path $outDir -Recurse | Where-Object { $_.Extension -match 'msix|msixupload|appxsym' } | Select-Object Name, Length, FullName | Format-Table -AutoSize
 
       - name: Upload Store Packages as Build Artifacts
