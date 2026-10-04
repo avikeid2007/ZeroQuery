@@ -31,6 +31,12 @@ Desktop/**/wwwroot/*
 !Desktop/**/wwwroot/.gitkeep
 
 # ====================================================================
+# Desktop App Embedded Tools (Provisioned during build / package time)
+# ====================================================================
+Desktop/**/tools/*
+!Desktop/**/tools/.gitkeep
+
+# ====================================================================
 # Node.js / Next.js
 # ====================================================================
 node_modules/
