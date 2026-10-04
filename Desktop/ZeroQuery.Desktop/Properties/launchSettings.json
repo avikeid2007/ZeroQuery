@@ -1,5 +1,8 @@
 {
   "profiles": {
+    "ZeroQuery.Desktop (Package)": {
+      "commandName": "MsixPackage"
+    },
     "ZeroQuery.Desktop": {
       "commandName": "Project"
     }

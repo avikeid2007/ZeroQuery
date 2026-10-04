@@ -5,20 +5,20 @@
   xmlns:mp="http://schemas.microsoft.com/appx/2014/phone/manifest"
   xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
   xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
-  xmlns:systemai="http://schemas.microsoft.com/appx/manifest/systemai/windows10"
-  IgnorableNamespaces="uap rescap systemai">
+  IgnorableNamespaces="uap rescap">
 
   <Identity
-    Name="07353e32-d658-4421-9251-250c7ea3a772"
-    Publisher="CN=Avnish"
+    Name="34488AvnishKumar.ZeroQuery-TurnanydatabaseintoanAI"
+    Publisher="CN=1494B4FB-4349-4083-8AFA-16D2A64B8D99"
     Version="1.0.0.0" />
 
-  <mp:PhoneIdentity PhoneProductId="07353e32-d658-4421-9251-250c7ea3a772" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
+  <mp:PhoneIdentity PhoneProductId="8f3aea05-88f9-422d-b321-cda893fdb9d8" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
 
   <Properties>
-    <DisplayName>ZeroQuery.Desktop</DisplayName>
-    <PublisherDisplayName>Avnish</PublisherDisplayName>
+    <DisplayName>Zero Query - Turn any database into an AI app</DisplayName>
+    <PublisherDisplayName>Avnish Kumar</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
+    <Description>Point at any database, get an app. Natural language database querying with dynamic UI.</Description>
   </Properties>
 
   <Dependencies>
@@ -35,8 +35,8 @@
       Executable="$targetnametoken$.exe"
       EntryPoint="$targetentrypoint$">
       <uap:VisualElements
-        DisplayName="ZeroQuery.Desktop"
-        Description="ZeroQuery.Desktop"
+        DisplayName="Zero Query - Turn any database into an AI app"
+        Description="Point at any database, get an app. Natural language database querying with dynamic UI."
         BackgroundColor="transparent"
         Square150x150Logo="Assets\Square150x150Logo.png"
         Square44x44Logo="Assets\Square44x44Logo.png">
@@ -48,6 +48,5 @@
 
   <Capabilities>
     <rescap:Capability Name="runFullTrust" />
-    <systemai:Capability Name="systemAIModels"/>
   </Capabilities>
 </Package>

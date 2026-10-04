@@ -16,5 +16,6 @@
   </Folder>
   <Project Path="Desktop/ZeroQuery.Desktop/ZeroQuery.Desktop.csproj" Id="9d99e8e2-74a3-41c0-8bae-24f21add597a">
     <Platform Project="x64" />
+    <Deploy Solution="Debug|x64" />
   </Project>
 </Solution>

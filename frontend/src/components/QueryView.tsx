@@ -68,9 +68,14 @@ export default function QueryView({ instanceId }: QueryViewProps) {
   const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    // Cancel any in-flight stream if the user navigates away/disconnects mid-query.
+    // Cancel any in-flight stream and reset state when switching instances or unmounting
+    abortControllerRef.current?.abort();
+    setResult(null);
+    setErrorMessage(null);
+    setProgress(null);
+    setIsLoading(false);
     return () => abortControllerRef.current?.abort();
-  }, []);
+  }, [instanceId]);
 
   useEffect(() => {
     let timer: ReturnType<typeof setInterval> | null = null;
@@ -95,6 +100,7 @@ export default function QueryView({ instanceId }: QueryViewProps) {
     setIsLoading(true);
     setErrorMessage(null);
     setProgress(null);
+    setResult(null);
 
     const controller = new AbortController();
     abortControllerRef.current = controller;
@@ -229,14 +235,8 @@ export default function QueryView({ instanceId }: QueryViewProps) {
         </div>
       )}
 
-      {/* 4. Results, Loading Canvas, or Empty State */}
-      {result ? (
-        <UiSpecRenderer
-          spec={result}
-          instanceId={instanceId}
-          onCancel={() => setResult(null)}
-        />
-      ) : isLoading ? (
+      {/* 4. Loading Canvas, Results, or Empty State */}
+      {isLoading ? (
         <div className="query-loading-canvas">
           {/* Top Progress & Stage Status Card */}
           <div className="query-loading-header">
@@ -332,6 +332,12 @@ export default function QueryView({ instanceId }: QueryViewProps) {
             </div>
           </div>
         </div>
+      ) : result ? (
+        <UiSpecRenderer
+          spec={result}
+          instanceId={instanceId}
+          onCancel={() => setResult(null)}
+        />
       ) : !errorMessage ? (
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-[var(--win-border)] bg-[var(--win-card)]/50 p-10 text-center">
           <span className="text-3xl mb-2">⚡</span>

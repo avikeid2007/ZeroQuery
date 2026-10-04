@@ -279,9 +279,37 @@ npm install
 npm run build:desktop
 cd ..
 
-# 3. Launch the WinUI 3 Desktop Application
+# 3. Launch the WinUI 3 Desktop Application (Packaged Mode by Default)
 dotnet run --project Desktop/ZeroQuery.Desktop -p:Platform=x64
+
+# (Optional: Run unpackaged dev mode without MSIX registration)
+# dotnet run --project Desktop/ZeroQuery.Desktop -p:Platform=x64 -p:WindowsPackageType=None
 ```
+
+#### 🏪 Microsoft Store & MSIX Package Deployment
+
+ZeroQuery Desktop is **packaged by default** as a modern Windows MSIX package compliant with Microsoft Store Partner Center ingestion rules:
+
+* **Build Store-Ready MSIX Package**:
+  ```powershell
+  dotnet publish Desktop/ZeroQuery.Desktop/ZeroQuery.Desktop.csproj -p:Platform=x64 -c Release
+  ```
+  Generates `ZeroQuery.Desktop_1.0.0.0_x64.msix` inside `Desktop/ZeroQuery.Desktop/AppPackages/ZeroQuery.Desktop_1.0.0.0_x64_Test/`.
+
+* **Submitting to the Microsoft Store**:
+  1. Reserve your app name in the [Microsoft Partner Center Dashboard](https://partner.microsoft.com/dashboard).
+  2. Associate the project: In Visual Studio, right-click `ZeroQuery.Desktop` > **Publish** > **Associate App with the Store...** (or update the `<Identity Name="..." Publisher="..." />` in `Desktop/ZeroQuery.Desktop/Package.appxmanifest` with your Partner Center Publisher details).
+  3. Run the release publish command above.
+  4. In Partner Center, go to **Packages** and upload the generated `.msix` file. Microsoft Store will sign it with the Microsoft Store certificate and distribute it to all Windows 10/11 devices.
+
+* **Option B: Automated GitHub Actions CI/CD**:
+  Push a version tag (e.g. `git tag v1.0.0 && git push origin v1.0.0`) or go to **Actions** > **Build & Package for Microsoft Store** > **Run workflow**. The workflow automatically compiles the Next.js frontend, builds the Store `.msix` and `.msixupload` packages, and uploads them to the GitHub release and run artifacts.
+
+* **Option C: Portable Standalone Executable (Unpackaged Folder / Zip)**:
+  ```powershell
+  dotnet publish Desktop/ZeroQuery.Desktop/ZeroQuery.Desktop.csproj -p:Platform=x64 -c Release -p:WindowsPackageType=None
+  ```
+  Generates a self-contained folder in `Desktop/ZeroQuery.Desktop/bin/Release/.../publish/` with `ZeroQuery.Desktop.exe` and bundled dependencies that can be zipped and run directly on any Windows 10/11 x64 machine.
 
 > [!TIP]
 > ZeroQuery Desktop automatically provisions Microsoft Data API Builder in a sandboxed Win32 Job Object and maps web assets to `https://zeroquery.local/`.
