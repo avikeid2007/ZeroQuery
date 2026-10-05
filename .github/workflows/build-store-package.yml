@@ -61,9 +61,10 @@ jobs:
         run: |
           Write-Host "Installing and embedding Microsoft Data API Builder CLI into Desktop/ZeroQuery.Desktop/tools/dab..."
           dotnet tool install --tool-path Desktop/ZeroQuery.Desktop/tools/dab Microsoft.DataApiBuilder --ignore-failed-sources
-          if (Test-Path Desktop/ZeroQuery.Desktop/tools/dab/dab.exe) {
+          $installedFiles = Get-ChildItem -Path "Desktop/ZeroQuery.Desktop/tools/dab" -Recurse | Where-Object { $_.Name -match 'dab\.(exe|cmd)$|Microsoft\.DataApiBuilder\.exe$' }
+          if ($installedFiles) {
               Write-Host "Successfully embedded DAB CLI into desktop bundle:"
-              Get-ChildItem -Path Desktop/ZeroQuery.Desktop/tools/dab
+              $installedFiles | Select-Object Name, FullName | Format-Table -AutoSize
           } else {
               Write-Error "DAB CLI failed to install into tools/dab!"
               exit 1

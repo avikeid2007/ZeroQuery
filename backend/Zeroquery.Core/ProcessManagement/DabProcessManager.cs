@@ -141,16 +141,32 @@ public sealed class DabProcessManager : IDisposable
         }
 
         // 1. Check local application directory (bundled standalone desktop worker)
+        var localToolPath = Path.Combine(AppContext.BaseDirectory, "tools", "dab", OperatingSystem.IsWindows() ? "dab.exe" : "dab");
+        if (File.Exists(localToolPath))
+        {
+            return localToolPath;
+        }
+
+        var localCmdPath = Path.Combine(AppContext.BaseDirectory, "tools", "dab", "dab.cmd");
+        if (File.Exists(localCmdPath))
+        {
+            return localCmdPath;
+        }
+
         var localDllPath = Path.Combine(AppContext.BaseDirectory, "tools", "dab", "Microsoft.DataApiBuilder.dll");
         if (File.Exists(localDllPath))
         {
             return localDllPath;
         }
 
-        var localToolPath = Path.Combine(AppContext.BaseDirectory, "tools", "dab", OperatingSystem.IsWindows() ? "dab.exe" : "dab");
-        if (File.Exists(localToolPath))
+        var toolsDir = Path.Combine(AppContext.BaseDirectory, "tools", "dab");
+        if (Directory.Exists(toolsDir))
         {
-            return localToolPath;
+            var foundExe = Directory.EnumerateFiles(toolsDir, OperatingSystem.IsWindows() ? "Microsoft.DataApiBuilder.exe" : "Microsoft.DataApiBuilder", SearchOption.AllDirectories).FirstOrDefault();
+            if (foundExe != null)
+            {
+                return foundExe;
+            }
         }
 
         var localExePath = Path.Combine(AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "dab.exe" : "dab");
@@ -181,13 +197,17 @@ public sealed class DabProcessManager : IDisposable
     {
         var executablePath = ResolveDabExecutablePath();
         var isDll = executablePath.EndsWith(".dll", StringComparison.OrdinalIgnoreCase);
+        var isCmd = executablePath.EndsWith(".cmd", StringComparison.OrdinalIgnoreCase) || executablePath.EndsWith(".bat", StringComparison.OrdinalIgnoreCase);
 
         var startInfo = new ProcessStartInfo
         {
-            FileName = isDll ? "dotnet" : executablePath,
+            FileName = isDll ? "dotnet" : isCmd ? "cmd.exe" : executablePath,
             Arguments = isDll
                 ? $"\"{executablePath}\" start --config \"{instance.ConfigPath}\" --no-https-redirect"
+                : isCmd
+                ? $"/c \"\"{executablePath}\" start --config \"{instance.ConfigPath}\" --no-https-redirect\""
                 : $"start --config \"{instance.ConfigPath}\" --no-https-redirect",
+            WorkingDirectory = Path.GetDirectoryName(executablePath) ?? AppContext.BaseDirectory,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
