@@ -34,9 +34,11 @@
     <Content Include="Assets\Wide310x150Logo.scale-200.png" />
     <Content Include="wwwroot\**\*">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <MakePriResource>false</MakePriResource>
     </Content>
     <Content Include="tools\**\*">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <MakePriResource>false</MakePriResource>
     </Content>
   </ItemGroup>
 

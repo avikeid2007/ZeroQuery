@@ -59,16 +59,39 @@ jobs:
       - name: Install & Embed Microsoft Data API Builder (DAB) CLI
         shell: pwsh
         run: |
-          Write-Host "Installing and embedding Microsoft Data API Builder CLI into Desktop/ZeroQuery.Desktop/tools/dab..."
-          dotnet tool install --tool-path Desktop/ZeroQuery.Desktop/tools/dab Microsoft.DataApiBuilder --ignore-failed-sources
-          $installedFiles = Get-ChildItem -Path "Desktop/ZeroQuery.Desktop/tools/dab" -Recurse | Where-Object { $_.Name -match 'dab\.(exe|cmd)$|Microsoft\.DataApiBuilder\.exe$' }
-          if ($installedFiles) {
-              Write-Host "Successfully embedded DAB CLI into desktop bundle:"
-              $installedFiles | Select-Object Name, FullName | Format-Table -AutoSize
-          } else {
-              Write-Error "DAB CLI failed to install into tools/dab!"
+          Write-Host "Installing Microsoft Data API Builder CLI to temporary staging..."
+          New-Item -ItemType Directory -Path "staging-dab" -Force | Out-Null
+          dotnet tool install --tool-path staging-dab Microsoft.DataApiBuilder --ignore-failed-sources
+
+          # Locate the executable folder inside .store
+          $binDir = (Get-ChildItem -Path "staging-dab" -Recurse -Filter "Microsoft.DataApiBuilder.exe" | Select-Object -First 1).DirectoryName
+          if (-not $binDir -or -not (Test-Path $binDir)) {
+              Write-Error "Could not find Microsoft.DataApiBuilder.exe in staging-dab!"
               exit 1
           }
+          Write-Host "Found DAB binary directory: $binDir"
+
+          # Flatten required binaries directly into Desktop/ZeroQuery.Desktop/tools/dab
+          # Copying only files (no subdirectories) avoids language satellite assemblies and win-x64 folder naming that conflict with Windows App SDK MakePri resource indexing
+          $targetDir = "Desktop/ZeroQuery.Desktop/tools/dab"
+          New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
+          Get-ChildItem -Path $binDir -File | Copy-Item -Destination $targetDir -Force
+
+          # Create dab.exe alias for Microsoft.DataApiBuilder.exe
+          Copy-Item (Join-Path $targetDir "Microsoft.DataApiBuilder.exe") (Join-Path $targetDir "dab.exe") -Force
+
+          # Clean up temporary staging directory
+          Remove-Item -Path "staging-dab" -Recurse -Force
+
+          # Test that embedded dab.exe runs standalone
+          $dabExe = Join-Path $targetDir "dab.exe"
+          Write-Host "Verifying embedded DAB executable ($dabExe --version):"
+          & $dabExe --version
+          if ($LASTEXITCODE -ne 0) {
+              Write-Error "Embedded DAB failed version check!"
+              exit 1
+          }
+          Write-Host "Successfully embedded standalone DAB CLI into $targetDir"
 
       - name: Update Package Version in Manifest
         shell: pwsh
