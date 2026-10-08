@@ -151,20 +151,15 @@ jobs:
         shell: pwsh
         run: |
           $outDir = "Desktop/ZeroQuery.Desktop/AppPackages"
-          Write-Host "Scanning repo for generated MSIX output (in case of path-resolution quirks)..."
-          Get-ChildItem -Path . -Recurse -Directory -Filter "AppPackages" -ErrorAction SilentlyContinue |
-              ForEach-Object { Write-Host "Found AppPackages dir: $($_.FullName)" }
-
-          Write-Host "Scanning $outDir for generated packages..."
-          # NOTE: a prefix-anchored pattern like "ZeroQuery*.msix" combined with -Recurse on a multi-segment
-          # relative path can get matched against the fuller relative path instead of just the leaf file name,
-          # so it silently fails to match. Use a plain suffix wildcard for enumeration, then filter the leaf
-          # name explicitly via .Name, which is unambiguous.
-          $msixFiles = @(Get-ChildItem -Path $outDir -Recurse -Include "*.msix" -ErrorAction SilentlyContinue |
-              Where-Object { $_.Name -like "ZeroQuery*" -and $_.FullName -notmatch "Debug" })
+          Write-Host "Scanning for generated MSIX output..."
+          # A targeted Get-ChildItem -Path $outDir -Recurse search has proven unreliable on these
+          # runners (returns zero results even though the files exist and a repo-root-anchored
+          # search finds them every time) - so always search repo-wide from "." instead.
+          $msixFiles = @(Get-ChildItem -Path . -Recurse -Include "*.msix" -ErrorAction SilentlyContinue |
+              Where-Object { $_.FullName -like "*AppPackages*" -and $_.Name -like "ZeroQuery*" -and $_.FullName -notmatch "Debug" })
 
           if ($msixFiles.Count -eq 0) {
-              Write-Host "::error::No .msix files found under $outDir"
+              Write-Host "::error::No .msix files found anywhere under AppPackages"
               Write-Host "Full repo tree search for any .msix/.msixbundle files:"
               Get-ChildItem -Path . -Recurse -Include "*.msix","*.msixbundle" -ErrorAction SilentlyContinue | Select-Object FullName, Length | Format-Table -AutoSize
               exit 1
@@ -172,7 +167,7 @@ jobs:
 
           foreach ($file in $msixFiles) {
               $baseName = [System.IO.Path]::GetFileNameWithoutExtension($file.Name)
-              $uploadZip = Join-Path $outDir "$baseName.msixupload"
+              $uploadZip = Join-Path $file.DirectoryName "$baseName.msixupload"
               if (-not (Test-Path $uploadZip)) {
                   Write-Host "Generating .msixupload bundle for $($file.Name)..."
                   Compress-Archive -Path $file.FullName -DestinationPath $uploadZip -Force
@@ -180,7 +175,9 @@ jobs:
           }
           
           Write-Host "Generated Store packages in: $outDir"
-          Get-ChildItem -Path $outDir -Recurse | Where-Object { $_.Extension -match 'msix|msixupload|appxsym' } | Select-Object Name, Length, FullName | Format-Table -AutoSize
+          Get-ChildItem -Path . -Recurse -ErrorAction SilentlyContinue |
+              Where-Object { $_.FullName -like "*AppPackages*" -and $_.Extension -match 'msix|msixupload|appxsym' } |
+              Select-Object Name, Length, FullName | Format-Table -AutoSize
 
       - name: Upload Store Packages as Build Artifacts
         uses: actions/upload-artifact@v4
