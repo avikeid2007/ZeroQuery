@@ -118,32 +118,53 @@ jobs:
         shell: pwsh
         run: |
           Write-Host "Publishing x64 Store MSIX package..."
+          $appxDir = Join-Path (Resolve-Path "Desktop/ZeroQuery.Desktop") "AppPackages\"
           dotnet publish Desktop/ZeroQuery.Desktop/ZeroQuery.Desktop.csproj `
             -p:Platform=x64 `
             -c Release `
             -p:GenerateAppxPackageOnBuild=true `
             -p:AppxPackageSigningEnabled=false `
-            -p:AppxPackageDir="AppPackages\"
+            -p:AppxPackageDir="$appxDir"
+          if ($LASTEXITCODE -ne 0) {
+              Write-Host "::error::dotnet publish (x64) failed with exit code $LASTEXITCODE"
+              exit $LASTEXITCODE
+          }
 
       - name: Build Store-Ready MSIX Package (ARM64)
         if: ${{ github.event.inputs.platform == 'arm64' || github.event.inputs.platform == 'both' }}
         shell: pwsh
         run: |
           Write-Host "Publishing ARM64 Store MSIX package..."
+          $appxDir = Join-Path (Resolve-Path "Desktop/ZeroQuery.Desktop") "AppPackages\"
           dotnet publish Desktop/ZeroQuery.Desktop/ZeroQuery.Desktop.csproj `
             -p:Platform=ARM64 `
             -c Release `
             -p:GenerateAppxPackageOnBuild=true `
             -p:AppxPackageSigningEnabled=false `
-            -p:AppxPackageDir="AppPackages\"
+            -p:AppxPackageDir="$appxDir"
+          if ($LASTEXITCODE -ne 0) {
+              Write-Host "::error::dotnet publish (ARM64) failed with exit code $LASTEXITCODE"
+              exit $LASTEXITCODE
+          }
 
       - name: Prepare .msixupload Packages for Microsoft Partner Center
         shell: pwsh
         run: |
           $outDir = "Desktop/ZeroQuery.Desktop/AppPackages"
+          Write-Host "Scanning repo for generated MSIX output (in case of path-resolution quirks)..."
+          Get-ChildItem -Path . -Recurse -Directory -Filter "AppPackages" -ErrorAction SilentlyContinue |
+              ForEach-Object { Write-Host "Found AppPackages dir: $($_.FullName)" }
+
           Write-Host "Scanning $outDir for generated packages..."
-          $msixFiles = Get-ChildItem -Path $outDir -Recurse -Filter "ZeroQuery*.msix" | Where-Object { $_.FullName -notmatch "Debug" }
-          
+          $msixFiles = @(Get-ChildItem -Path $outDir -Recurse -Filter "ZeroQuery*.msix" -ErrorAction SilentlyContinue | Where-Object { $_.FullName -notmatch "Debug" })
+
+          if ($msixFiles.Count -eq 0) {
+              Write-Host "::error::No .msix files found under $outDir"
+              Write-Host "Full repo tree search for any .msix/.msixbundle files:"
+              Get-ChildItem -Path . -Recurse -Include "*.msix","*.msixbundle" -ErrorAction SilentlyContinue | Select-Object FullName, Length | Format-Table -AutoSize
+              exit 1
+          }
+
           foreach ($file in $msixFiles) {
               $baseName = [System.IO.Path]::GetFileNameWithoutExtension($file.Name)
               $uploadZip = Join-Path $outDir "$baseName.msixupload"
@@ -163,6 +184,8 @@ jobs:
           path: |
             Desktop/ZeroQuery.Desktop/AppPackages/**/*.msix
             Desktop/ZeroQuery.Desktop/AppPackages/**/*.msixupload
+            AppPackages/**/*.msix
+            AppPackages/**/*.msixupload
           if-no-files-found: error
           retention-days: 14
 
@@ -173,6 +196,8 @@ jobs:
           files: |
             Desktop/ZeroQuery.Desktop/AppPackages/**/*.msix
             Desktop/ZeroQuery.Desktop/AppPackages/**/*.msixupload
+            AppPackages/**/*.msix
+            AppPackages/**/*.msixupload
           draft: false
           prerelease: false
           generate_release_notes: true
