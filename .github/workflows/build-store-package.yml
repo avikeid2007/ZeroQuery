@@ -156,7 +156,10 @@ jobs:
               ForEach-Object { Write-Host "Found AppPackages dir: $($_.FullName)" }
 
           Write-Host "Scanning $outDir for generated packages..."
-          $msixFiles = @(Get-ChildItem -Path $outDir -Recurse -Filter "ZeroQuery*.msix" -ErrorAction SilentlyContinue | Where-Object { $_.FullName -notmatch "Debug" })
+          # NOTE: -Filter + -Recurse on the FileSystem provider also filters which subdirectories get traversed,
+          # so it skips nested folders like "ZeroQuery.Desktop_1.1.2.0_Test" that don't themselves match the pattern.
+          # Use -Include instead, which filters post-enumeration and recurses into every subdirectory.
+          $msixFiles = @(Get-ChildItem -Path $outDir -Recurse -Include "ZeroQuery*.msix" -ErrorAction SilentlyContinue | Where-Object { $_.FullName -notmatch "Debug" })
 
           if ($msixFiles.Count -eq 0) {
               Write-Host "::error::No .msix files found under $outDir"
