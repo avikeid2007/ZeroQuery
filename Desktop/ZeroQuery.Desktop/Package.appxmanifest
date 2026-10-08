@@ -10,7 +10,7 @@
   <Identity
     Name="34488AvnishKumar.ZeroQuery-TurnanydatabaseintoanAI"
     Publisher="CN=1494B4FB-4349-4083-8AFA-16D2A64B8D99"
-    Version="1.1.0.0" />
+    Version="1.1.1.0" />
 
   <mp:PhoneIdentity PhoneProductId="8f3aea05-88f9-422d-b321-cda893fdb9d8" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
 
