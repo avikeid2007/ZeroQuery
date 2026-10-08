@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="frontend/public/zeroquery-logo.svg" alt="Zeroquery logo" width="96" height="96" />
+
 # ⚡ Zeroquery
 
 ### Point at any database → Auto-generate a scoped MCP server → Query in natural language with a dynamic UI.
@@ -23,7 +25,8 @@
   <a href="#-architecture">Architecture</a> •
   <a href="#-quickstart">Quickstart</a> •
   <a href="#-recommended-llm-models">Recommended Models</a> •
-  <a href="#-security-architecture">Security</a>
+  <a href="#-security-architecture">Security</a> •
+  <a href="PRIVACY.md">Privacy Policy</a>
 </p>
 
 <p align="center">
@@ -494,3 +497,5 @@ Contributions, bug reports, and suggestions are welcome! Please read [CONTRIBUTI
 ## 📄 License
 
 Zeroquery is open-sourced under the [MIT License](LICENSE) — matching Microsoft Data API Builder's permissive licensing.
+
+See [PRIVACY.md](PRIVACY.md) for the project's privacy policy.
