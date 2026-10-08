@@ -284,7 +284,7 @@ public sealed class DesktopIpcDispatcher
                 var req = SafeDeserialize<UpdateLlmSettingsRequestDto>(request.Payload)
                     ?? throw new ArgumentException("Invalid LLM settings payload.");
 
-                _llmSettingsStore.Update(req.ApiKey, req.ModelId, req.SystemPrompt);
+                _llmSettingsStore.Update(req.ApiKey, req.ModelId, req.SystemPrompt, req.BaseUrl);
                 var updated = _llmSettingsStore.GetMasked();
                 return LlmSettingsResponseDto.From(updated);
             }

@@ -392,8 +392,9 @@ All settings can be configured via environment variables or `appsettings.json`:
 
 | Environment Variable | Default | Description |
 | :--- | :--- | :--- |
-| `OPENROUTER_API_KEY` | *(empty)* | OpenRouter API key (can also be saved via the in-app UI). |
+| `OPENROUTER_API_KEY` | *(empty)* | API key for the LLM provider (can also be saved via the in-app UI). |
 | `LLM_MODEL_ID` | `openrouter/auto` | The target model identifier. |
+| `OpenRouter__BaseUrl` | `https://openrouter.ai/api/v1` | Chat-completions base URL. Override (via env var or the in-app Settings UI) to use any OpenAI-compatible provider instead of OpenRouter — e.g. OpenAI, Groq, Together AI, DeepSeek, or a local Ollama/LM Studio server. |
 | `Orchestration__MaxToolCallIterations` | `10` | Maximum autonomous tool-calling iterations per user prompt. |
 
 ### Persistence & Storage

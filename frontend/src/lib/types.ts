@@ -183,12 +183,15 @@ export interface LlmSettingsResponse {
   apiKeyMasked: string | null;
   systemPrompt?: string | null;
   defaultSystemPrompt?: string;
+  baseUrl?: string | null;
+  defaultBaseUrl?: string;
 }
 
 export interface UpdateLlmSettingsRequest {
   apiKey: string | null;
   modelId: string | null;
   systemPrompt?: string | null;
+  baseUrl?: string | null;
 }
 
 // Mirrors backend/Zeroquery.Api/Connections/ConnectionDtos.cs (Phase 7)

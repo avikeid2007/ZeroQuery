@@ -169,17 +169,21 @@ public sealed record LlmSettingsResponseDto(
     bool IsApiKeyConfigured,
     string? ApiKeyMasked,
     string? SystemPrompt,
-    string? DefaultSystemPrompt)
+    string? DefaultSystemPrompt,
+    string? BaseUrl,
+    string? DefaultBaseUrl)
 {
     public static LlmSettingsResponseDto From(LlmSettingsView view) => new(
         view.ModelId,
         view.IsApiKeyConfigured,
         view.ApiKeyMasked,
         view.SystemPrompt,
-        view.DefaultSystemPrompt);
+        view.DefaultSystemPrompt,
+        view.BaseUrl,
+        view.DefaultBaseUrl);
 }
 
-public sealed record UpdateLlmSettingsRequestDto(string? ApiKey, string? ModelId, string? SystemPrompt);
+public sealed record UpdateLlmSettingsRequestDto(string? ApiKey, string? ModelId, string? SystemPrompt, string? BaseUrl);
 
 // DTOs for Saved Connections
 public sealed record SaveConnectionRequestDto(

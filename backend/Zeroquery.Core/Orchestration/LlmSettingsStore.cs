@@ -11,7 +11,13 @@ namespace Zeroquery.Core.Orchestration;
 /// <param name="ApiKey">Raw API key. Never serialize this back to a client — see <see cref="ILlmSettingsStore.GetMasked"/>.</param>
 /// <param name="ModelId">Model id to request from the provider.</param>
 /// <param name="SystemPrompt">Optional custom master system prompt. When null or empty, the default Zeroquery prompt is used.</param>
-public sealed record LlmSettings(string ApiKey, string ModelId, string? SystemPrompt = null);
+/// <param name="BaseUrl">
+/// Optional override of the chat-completions API base URL, letting a user point at any
+/// OpenAI-compatible provider (OpenAI, Azure OpenAI, Groq, Together, DeepSeek, a local
+/// Ollama/LM Studio server, etc.) instead of just OpenRouter. Null/empty means "use the
+/// default OpenRouter endpoint".
+/// </param>
+public sealed record LlmSettings(string ApiKey, string ModelId, string? SystemPrompt = null, string? BaseUrl = null);
 
 /// <summary>Safe-to-expose view of <see cref="LlmSettings"/> — the raw key is never included.</summary>
 /// <param name="ModelId">Currently configured model id.</param>
@@ -19,19 +25,24 @@ public sealed record LlmSettings(string ApiKey, string ModelId, string? SystemPr
 /// <param name="ApiKeyMasked">Last 4 characters of the key (e.g. "••••av3x"), or null if none is configured.</param>
 /// <param name="SystemPrompt">Currently configured custom system prompt, or null if using default.</param>
 /// <param name="DefaultSystemPrompt">Built-in default system prompt for display and resets.</param>
+/// <param name="BaseUrl">Currently configured custom API base URL, or null if using the default provider.</param>
+/// <param name="DefaultBaseUrl">Built-in default API base URL (OpenRouter) for display and resets.</param>
 public sealed record LlmSettingsView(
     string ModelId,
     bool IsApiKeyConfigured,
     string? ApiKeyMasked,
     string? SystemPrompt,
-    string DefaultSystemPrompt);
+    string DefaultSystemPrompt,
+    string? BaseUrl,
+    string DefaultBaseUrl);
 
 /// <summary>
-/// Holds the LLM provider settings (API key, model id, master prompt) that <see cref="OpenRouterLlmProvider"/>
-/// reads on every call. Seeded at startup from <see cref="OpenRouterOptions"/> (env vars /
-/// appsettings — see doc/Plan.md Section 8), but can be updated at runtime through the
-/// settings UI. When <see cref="PersistenceOptions.IsSaveMode"/> is true, settings persist
-/// to disk encrypted across backend restarts (Phase 7).
+/// Holds the LLM provider settings (API key, model id, base URL, master prompt) that
+/// <see cref="OpenRouterLlmProvider"/> reads on every call — any OpenAI-compatible provider
+/// can be targeted by overriding <see cref="LlmSettings.BaseUrl"/>. Seeded at startup from
+/// <see cref="OpenRouterOptions"/> (env vars / appsettings — see doc/Plan.md Section 8), but
+/// can be updated at runtime through the settings UI. When <see cref="PersistenceOptions.IsSaveMode"/>
+/// is true, settings persist to disk encrypted across backend restarts (Phase 7).
 /// </summary>
 public interface ILlmSettingsStore
 {
@@ -43,9 +54,9 @@ public interface ILlmSettingsStore
     /// <summary>
     /// Updates settings. Pass null to leave a field unchanged; pass an empty string for
     /// <paramref name="apiKey"/> to explicitly clear it. Pass empty string or "__RESET__"
-    /// for <paramref name="systemPrompt"/> to reset to default.
+    /// for <paramref name="systemPrompt"/> or <paramref name="baseUrl"/> to reset to default.
     /// </summary>
-    void Update(string? apiKey, string? modelId, string? systemPrompt = null);
+    void Update(string? apiKey, string? modelId, string? systemPrompt = null, string? baseUrl = null);
 }
 
 public sealed class LlmSettingsStore : ILlmSettingsStore
@@ -85,13 +96,14 @@ public sealed class LlmSettingsStore : ILlmSettingsStore
           ('create' | 'update' | 'delete'), 'entity', 'primaryKey', and 'fields' comparing 'currentValue' vs 'proposedValue'.
         """;
 
-    private sealed record PersistedSettings(string? EncryptedApiKey, string? ModelId, string? SystemPrompt = null);
+    private sealed record PersistedSettings(string? EncryptedApiKey, string? ModelId, string? SystemPrompt = null, string? BaseUrl = null);
 
     private readonly Lock _lock = new();
     private readonly PersistenceOptions? _persistenceOptions;
     private readonly IConnectionStringProtector? _protector;
     private readonly ILogger<LlmSettingsStore> _logger;
     private readonly string? _filePath;
+    private readonly string _defaultBaseUrl;
     private LlmSettings _current;
 
     public LlmSettingsStore(
@@ -103,6 +115,7 @@ public sealed class LlmSettingsStore : ILlmSettingsStore
         _persistenceOptions = persistenceOptions?.Value;
         _protector = protector;
         _logger = logger ?? NullLogger<LlmSettingsStore>.Instance;
+        _defaultBaseUrl = options.Value.BaseUrl;
 
         _current = new LlmSettings(options.Value.ApiKey, options.Value.ModelId);
 
@@ -146,6 +159,11 @@ public sealed class LlmSettingsStore : ILlmSettingsStore
                 {
                     _current = _current with { SystemPrompt = persisted.SystemPrompt };
                 }
+
+                if (!string.IsNullOrWhiteSpace(persisted.BaseUrl))
+                {
+                    _current = _current with { BaseUrl = persisted.BaseUrl };
+                }
             }
         }
         catch (Exception ex)
@@ -170,10 +188,10 @@ public sealed class LlmSettingsStore : ILlmSettingsStore
         var current = Current;
         var isConfigured = !string.IsNullOrWhiteSpace(current.ApiKey);
         var masked = isConfigured ? Mask(current.ApiKey) : null;
-        return new LlmSettingsView(current.ModelId, isConfigured, masked, current.SystemPrompt, DefaultSystemPrompt);
+        return new LlmSettingsView(current.ModelId, isConfigured, masked, current.SystemPrompt, DefaultSystemPrompt, current.BaseUrl, _defaultBaseUrl);
     }
 
-    public void Update(string? apiKey, string? modelId, string? systemPrompt = null)
+    public void Update(string? apiKey, string? modelId, string? systemPrompt = null, string? baseUrl = null)
     {
         lock (_lock)
         {
@@ -186,17 +204,24 @@ public sealed class LlmSettingsStore : ILlmSettingsStore
                 "__RESET__" => null,
                 _ => systemPrompt
             };
+            var nextBaseUrl = baseUrl switch
+            {
+                null => _current.BaseUrl,
+                "" => null,
+                "__RESET__" => null,
+                _ => baseUrl
+            };
 
-            _current = new LlmSettings(nextApiKey, nextModelId, nextSystemPrompt);
+            _current = new LlmSettings(nextApiKey, nextModelId, nextSystemPrompt, nextBaseUrl);
 
             if (_persistenceOptions?.IsSaveMode == true && _filePath is not null)
             {
-                SaveToDisk(nextApiKey, nextModelId, nextSystemPrompt);
+                SaveToDisk(nextApiKey, nextModelId, nextSystemPrompt, nextBaseUrl);
             }
         }
     }
 
-    private void SaveToDisk(string apiKey, string modelId, string? systemPrompt)
+    private void SaveToDisk(string apiKey, string modelId, string? systemPrompt, string? baseUrl)
     {
         try
         {
@@ -207,7 +232,7 @@ public sealed class LlmSettingsStore : ILlmSettingsStore
                 ? _protector.Protect(apiKey)
                 : null;
 
-            var persisted = new PersistedSettings(encryptedKey, modelId, systemPrompt);
+            var persisted = new PersistedSettings(encryptedKey, modelId, systemPrompt, baseUrl);
             var json = JsonSerializer.Serialize(persisted, new JsonSerializerOptions { WriteIndented = true });
             File.WriteAllText(_filePath, json);
         }

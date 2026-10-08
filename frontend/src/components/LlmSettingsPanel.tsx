@@ -3,6 +3,24 @@
 import { useEffect, useState } from "react";
 import { getLlmSettings, updateLlmSettings, ApiError } from "@/lib/api";
 
+// Known OpenAI-compatible chat-completions providers. The backend only needs a base URL +
+// API key + model id to talk to any of these — "Custom" lets a user point at anything else
+// (self-hosted vLLM, LM Studio, a company gateway, etc.) that speaks the same API shape.
+const PROVIDER_PRESETS = [
+  { id: "openrouter", name: "OpenRouter (default)", baseUrl: "https://openrouter.ai/api/v1", modelPlaceholder: "openrouter/auto" },
+  { id: "openai", name: "OpenAI", baseUrl: "https://api.openai.com/v1", modelPlaceholder: "gpt-4o" },
+  { id: "groq", name: "Groq", baseUrl: "https://api.groq.com/openai/v1", modelPlaceholder: "llama-3.3-70b-versatile" },
+  { id: "together", name: "Together AI", baseUrl: "https://api.together.xyz/v1", modelPlaceholder: "meta-llama/Llama-3.3-70B-Instruct-Turbo" },
+  { id: "deepseek", name: "DeepSeek", baseUrl: "https://api.deepseek.com/v1", modelPlaceholder: "deepseek-chat" },
+  { id: "ollama", name: "Ollama (local)", baseUrl: "http://localhost:11434/v1", modelPlaceholder: "llama3.1" },
+  { id: "custom", name: "Custom / self-hosted", baseUrl: "", modelPlaceholder: "model-id" },
+] as const;
+
+function matchProviderPreset(baseUrl: string): (typeof PROVIDER_PRESETS)[number]["id"] {
+  const match = PROVIDER_PRESETS.find((p) => p.id !== "custom" && p.baseUrl === baseUrl.trim());
+  return match ? match.id : "custom";
+}
+
 const PROMPT_PRESETS = [
   {
     id: "auto-improve",
@@ -71,9 +89,10 @@ ANALYTICAL WORKFLOW:
 ];
 
 /**
- * Global settings panel for the LLM provider (OpenRouter) used by the query orchestration
- * loop — lets a user configure the API key/model and customize/improve the master system prompt
- * from the UI.
+ * Global settings panel for the LLM provider used by the query orchestration loop — lets a
+ * user pick OpenRouter or another OpenAI-compatible provider (OpenAI, Groq, Together,
+ * DeepSeek, a local Ollama server, or a custom endpoint), configure the API key/model, and
+ * customize/improve the master system prompt from the UI.
  */
 export default function LlmSettingsPanel() {
   const [isOpen, setIsOpen] = useState(false);
@@ -87,6 +106,9 @@ export default function LlmSettingsPanel() {
   const [apiKeyMasked, setApiKeyMasked] = useState<string | null>(null);
   const [modelId, setModelId] = useState("");
   const [apiKeyInput, setApiKeyInput] = useState("");
+  const [baseUrl, setBaseUrl] = useState("");
+  const [defaultBaseUrl, setDefaultBaseUrl] = useState<string>("");
+  const [providerId, setProviderId] = useState<(typeof PROVIDER_PRESETS)[number]["id"]>("openrouter");
   const [systemPrompt, setSystemPrompt] = useState<string | null>(null);
   const [defaultSystemPrompt, setDefaultSystemPrompt] = useState<string>("");
   const [promptDraft, setPromptDraft] = useState<string>("");
@@ -107,6 +129,10 @@ export default function LlmSettingsPanel() {
         setSystemPrompt(settings.systemPrompt ?? null);
         setDefaultSystemPrompt(settings.defaultSystemPrompt ?? "");
         setPromptDraft(settings.systemPrompt || settings.defaultSystemPrompt || "");
+        const effectiveBaseUrl = settings.baseUrl || settings.defaultBaseUrl || "";
+        setBaseUrl(effectiveBaseUrl);
+        setDefaultBaseUrl(settings.defaultBaseUrl ?? "");
+        setProviderId(matchProviderPreset(effectiveBaseUrl));
       } catch (err) {
         if (isCancelled) return;
         setErrorMessage(err instanceof ApiError ? err.message : "Unexpected error loading LLM settings.");
@@ -122,6 +148,14 @@ export default function LlmSettingsPanel() {
     };
   }, []);
 
+  function handleProviderChange(nextProviderId: (typeof PROVIDER_PRESETS)[number]["id"]) {
+    setProviderId(nextProviderId);
+    const preset = PROVIDER_PRESETS.find((p) => p.id === nextProviderId);
+    if (preset && preset.id !== "custom") {
+      setBaseUrl(preset.baseUrl);
+    }
+  }
+
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     setIsSaving(true);
@@ -129,14 +163,19 @@ export default function LlmSettingsPanel() {
     setSaveMessage(null);
 
     try {
+      const trimmedBaseUrl = baseUrl.trim();
       const settings = await updateLlmSettings({
         apiKey: apiKeyInput.trim() ? apiKeyInput.trim() : null,
         modelId: modelId.trim() ? modelId.trim() : null,
+        baseUrl: trimmedBaseUrl === defaultBaseUrl.trim() ? "" : trimmedBaseUrl,
       });
       setIsApiKeyConfigured(settings.isApiKeyConfigured);
       setApiKeyMasked(settings.apiKeyMasked);
       setModelId(settings.modelId);
       setApiKeyInput("");
+      const effectiveBaseUrl = settings.baseUrl || settings.defaultBaseUrl || "";
+      setBaseUrl(effectiveBaseUrl);
+      setProviderId(matchProviderPreset(effectiveBaseUrl));
       setSaveMessage("Settings saved.");
       setTimeout(() => setSaveMessage(null), 2000);
     } catch (err) {
@@ -211,7 +250,9 @@ export default function LlmSettingsPanel() {
             <span className="text-sm font-medium text-text">LLM Settings</span>
             {!isLoading && (
               <span className="font-mono text-xs font-normal text-muted">
-                {isApiKeyConfigured ? `key ${apiKeyMasked} · ${modelId}` : "no API key set"}
+                {isApiKeyConfigured
+                  ? `${PROVIDER_PRESETS.find((p) => p.id === providerId)?.name ?? "Custom"} · ${apiKeyMasked} · ${modelId}`
+                  : "no API key set"}
               </span>
             )}
             <span className="text-xs text-muted ml-1">{isOpen ? "▲" : "▼"}</span>
@@ -245,13 +286,49 @@ export default function LlmSettingsPanel() {
             </p>
 
             <label className="flex flex-col gap-1.5">
-              <span className="text-xs text-muted">OpenRouter API key</span>
+              <span className="text-xs text-muted">Provider</span>
+              <select
+                value={providerId}
+                onChange={(e) => handleProviderChange(e.target.value as (typeof PROVIDER_PRESETS)[number]["id"])}
+                disabled={isSaving}
+                className="rounded-md border border-border bg-bg px-3 py-2 text-sm text-text focus:border-teal focus:outline-none disabled:opacity-50"
+              >
+                {PROVIDER_PRESETS.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            {providerId === "custom" && (
+              <label className="flex flex-col gap-1.5">
+                <span className="text-xs text-muted">API base URL</span>
+                <input
+                  type="text"
+                  value={baseUrl}
+                  onChange={(e) => setBaseUrl(e.target.value)}
+                  disabled={isSaving}
+                  placeholder="https://your-provider.example.com/v1"
+                  spellCheck={false}
+                  autoComplete="off"
+                  className="rounded-md border border-border bg-bg px-3 py-2 font-mono text-sm text-text focus:border-teal focus:outline-none disabled:opacity-50"
+                />
+                <span className="text-xs text-muted">
+                  Any OpenAI-compatible <code className="rounded bg-surface2 px-1 py-0.5">/chat/completions</code> endpoint
+                  (self-hosted vLLM, LM Studio, a company gateway, etc.).
+                </span>
+              </label>
+            )}
+
+            <label className="flex flex-col gap-1.5">
+              <span className="text-xs text-muted">API key</span>
               <input
                 type="password"
                 value={apiKeyInput}
                 onChange={(e) => setApiKeyInput(e.target.value)}
                 disabled={isSaving}
-                placeholder={isApiKeyConfigured ? `Currently: ${apiKeyMasked} (leave blank to keep)` : "sk-or-v1-..."}
+                placeholder={isApiKeyConfigured ? `Currently: ${apiKeyMasked} (leave blank to keep)` : "sk-..."}
                 spellCheck={false}
                 autoComplete="off"
                 className="rounded-md border border-border bg-bg px-3 py-2 font-mono text-sm text-text focus:border-teal focus:outline-none disabled:opacity-50"
@@ -265,7 +342,7 @@ export default function LlmSettingsPanel() {
                 value={modelId}
                 onChange={(e) => setModelId(e.target.value)}
                 disabled={isSaving}
-                placeholder="openrouter/auto"
+                placeholder={PROVIDER_PRESETS.find((p) => p.id === providerId)?.modelPlaceholder ?? "model-id"}
                 spellCheck={false}
                 className="rounded-md border border-border bg-bg px-3 py-2 font-mono text-sm text-text focus:border-teal focus:outline-none disabled:opacity-50"
               />

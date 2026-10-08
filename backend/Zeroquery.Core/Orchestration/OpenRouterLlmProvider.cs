@@ -10,7 +10,10 @@ namespace Zeroquery.Core.Orchestration;
 /// completions API (doc/Plan.md Section 2.7 / Section 8). OpenRouter mirrors the OpenAI
 /// <c>/chat/completions</c> request/response shape including the "tools"/"tool_calls"
 /// function-calling contract, so this implementation follows that shape directly rather
-/// than depending on an OpenAI SDK package.
+/// than depending on an OpenAI SDK package. Because nearly every alternative provider
+/// (OpenAI, Azure OpenAI, Groq, Together, DeepSeek, a local Ollama/LM Studio server, etc.)
+/// speaks this same shape, <see cref="LlmSettings.BaseUrl"/> can be overridden via Settings
+/// to target any of them without needing per-vendor implementations.
 /// </summary>
 public sealed class OpenRouterLlmProvider : ILlmProvider
 {
@@ -39,8 +42,13 @@ public sealed class OpenRouterLlmProvider : ILlmProvider
         if (string.IsNullOrWhiteSpace(settings.ApiKey))
         {
             throw new InvalidOperationException(
-                "OpenRouter API key is not configured. Set it in Settings, or via OpenRouter:ApiKey / the OPENROUTER_API_KEY env var.");
+                "LLM API key is not configured. Set it in Settings, or via OpenRouter:ApiKey / the OPENROUTER_API_KEY env var.");
         }
+
+        // BaseUrl may be overridden per-request via Settings to target any OpenAI-compatible
+        // provider (OpenAI, Azure OpenAI, Groq, Together, DeepSeek, a local Ollama/LM Studio
+        // server, etc.) instead of the default OpenRouter endpoint.
+        var baseUrl = string.IsNullOrWhiteSpace(settings.BaseUrl) ? _options.BaseUrl : settings.BaseUrl;
 
         var requestBody = new JsonObject
         {
@@ -53,7 +61,7 @@ public sealed class OpenRouterLlmProvider : ILlmProvider
             requestBody["tools"] = BuildToolsArray(tools);
         }
 
-        using var request = new HttpRequestMessage(HttpMethod.Post, $"{_options.BaseUrl.TrimEnd('/')}/chat/completions")
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"{baseUrl.TrimEnd('/')}/chat/completions")
         {
             Content = JsonContent.Create(requestBody)
         };
@@ -72,7 +80,7 @@ public sealed class OpenRouterLlmProvider : ILlmProvider
 
         if (!response.IsSuccessStatusCode)
         {
-            throw new InvalidOperationException($"OpenRouter request failed with status {(int)response.StatusCode}: {body}");
+            throw new InvalidOperationException($"LLM provider request to {baseUrl} failed with status {(int)response.StatusCode}: {body}");
         }
 
         return ParseCompletion(body);

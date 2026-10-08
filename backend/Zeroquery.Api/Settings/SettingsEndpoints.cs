@@ -20,7 +20,7 @@ public static class SettingsEndpoints
 
         group.MapPut("/llm", (UpdateLlmSettingsRequest request, ILlmSettingsStore store) =>
             {
-                store.Update(request.ApiKey, request.ModelId, request.SystemPrompt);
+                store.Update(request.ApiKey, request.ModelId, request.SystemPrompt, request.BaseUrl);
                 return Results.Ok(LlmSettingsResponse.From(store.GetMasked()));
             })
             .WithName("UpdateLlmSettings")
