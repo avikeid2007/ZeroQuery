@@ -152,11 +152,18 @@ jobs:
         run: |
           $outDir = "Desktop/ZeroQuery.Desktop/AppPackages"
           Write-Host "Scanning for generated MSIX output..."
-          # A targeted Get-ChildItem -Path $outDir -Recurse search has proven unreliable on these
-          # runners (returns zero results even though the files exist and a repo-root-anchored
-          # search finds them every time) - so always search repo-wide from "." instead.
-          $msixFiles = @(Get-ChildItem -Path . -Recurse -Include "*.msix" -ErrorAction SilentlyContinue |
-              Where-Object { $_.FullName -like "*AppPackages*" -and $_.Name -like "ZeroQuery*" -and $_.FullName -notmatch "Debug" })
+          # The first recursive Get-ChildItem walk after `dotnet publish` has repeatedly returned zero
+          # results on these hosted Windows runners even though the files are on disk (the identical
+          # walk run a second time a moment later finds them every time) - a directory-entry cache
+          # coherency delay, not a pattern/path bug. Retry with a short sleep until files appear.
+          $msixFiles = @()
+          for ($i = 1; $i -le 10; $i++) {
+              $msixFiles = @(Get-ChildItem -Path . -Recurse -Include "*.msix" -ErrorAction SilentlyContinue |
+                  Where-Object { $_.FullName -like "*AppPackages*" -and $_.Name -like "ZeroQuery*" -and $_.FullName -notmatch "Debug" })
+              if ($msixFiles.Count -gt 0) { break }
+              Write-Host "Attempt $i: no .msix files found yet; sleeping 3s and retrying..."
+              Start-Sleep -Seconds 3
+          }
 
           if ($msixFiles.Count -eq 0) {
               Write-Host "::error::No .msix files found anywhere under AppPackages"
