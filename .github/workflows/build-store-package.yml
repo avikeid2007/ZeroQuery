@@ -56,10 +56,20 @@ jobs:
       - name: Install Frontend Dependencies & Export Desktop Client
         shell: pwsh
         run: |
-          Write-Host "Building Next.js static client into Desktop wwwroot..."
+          Write-Host "Installing frontend dependencies (npm ci)..."
           cd frontend
           npm ci
+          if ($LASTEXITCODE -ne 0) {
+              Write-Host "::error::npm ci failed with exit code $LASTEXITCODE"
+              exit $LASTEXITCODE
+          }
+
+          Write-Host "Building Next.js static client into Desktop wwwroot (npm run build:desktop)..."
           npm run build:desktop
+          if ($LASTEXITCODE -ne 0) {
+              Write-Host "::error::npm run build:desktop failed with exit code $LASTEXITCODE"
+              exit $LASTEXITCODE
+          }
           cd ..
 
           $indexPath = "Desktop/ZeroQuery.Desktop/wwwroot/index.html"
