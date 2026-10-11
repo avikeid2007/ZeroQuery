@@ -14,8 +14,22 @@ Before setting up your local development environment, ensure you have installed:
   ```powershell
   dotnet tool install -g Microsoft.DataApiBuilder
   ```
+  > On Windows this installs a `dab.cmd` shim into `%USERPROFILE%\.dotnet\tools\`. `DabProcessManager` auto-detects both `dab.exe` and `dab.cmd` there, so no extra configuration is needed — just ensure `dotnet tool install` completed successfully (`dab --version` should work from any terminal).
 
 ---
+
+## 1.1 Desktop Client (ZeroQuery.Desktop) First-Run Setup
+
+The WinUI 3 desktop client loads its UI from a WebView2 pointed at `Desktop/ZeroQuery.Desktop/wwwroot`, which is **not** committed to git (only a `.gitkeep` placeholder). Building the `ZeroQuery.Desktop` project now automatically runs `npm run build:desktop` in `frontend/` the first time (if `wwwroot/index.html` is missing), producing the static Next.js export and copying it into `wwwroot`. If that automatic step fails (e.g. npm not on PATH for MSBuild), run it manually:
+
+```powershell
+cd frontend
+npm install
+npm run build:desktop
+```
+
+Re-run this whenever you change frontend code, since the desktop client does not hot-reload the static export.
+
 
 ## 2. Repository Structure
 

@@ -28,6 +28,12 @@ jobs:
     name: Build MSIX (${{ github.event.inputs.platform || 'x64' }})
     runs-on: windows-latest
 
+    env:
+      # Single, deterministic root for every generated package. Each architecture gets its
+      # own isolated subfolder (see Build-StorePackage.ps1) so artifact discovery never
+      # needs to search/retry/guess across the whole repo afterward.
+      PACKAGE_ROOT: ${{ github.workspace }}\StorePackages
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -56,23 +62,31 @@ jobs:
           npm run build:desktop
           cd ..
 
+          $indexPath = "Desktop/ZeroQuery.Desktop/wwwroot/index.html"
+          if (-not (Test-Path $indexPath)) {
+              Write-Host "::error::Frontend build did not produce $indexPath"
+              exit 1
+          }
+          Write-Host "Frontend export verified at $indexPath"
+
       - name: Install & Embed Microsoft Data API Builder (DAB) CLI
         shell: pwsh
         run: |
           Write-Host "Installing Microsoft Data API Builder CLI to temporary staging..."
-          New-Item -ItemType Directory -Path "staging-dab" -Force | Out-Null
-          dotnet tool install --tool-path staging-dab Microsoft.DataApiBuilder --ignore-failed-sources
+          $stagingDab = Join-Path $env:RUNNER_TEMP "staging-dab"
+          New-Item -ItemType Directory -Path $stagingDab -Force | Out-Null
+          dotnet tool install --tool-path $stagingDab Microsoft.DataApiBuilder --ignore-failed-sources
 
-          # Locate the executable folder inside .store
-          $binDir = (Get-ChildItem -Path "staging-dab" -Recurse -Filter "Microsoft.DataApiBuilder.exe" | Select-Object -First 1).DirectoryName
+          $binDir = (Get-ChildItem -Path $stagingDab -Recurse -Filter "Microsoft.DataApiBuilder.exe" | Select-Object -First 1).DirectoryName
           if (-not $binDir -or -not (Test-Path $binDir)) {
-              Write-Error "Could not find Microsoft.DataApiBuilder.exe in staging-dab!"
+              Write-Error "Could not find Microsoft.DataApiBuilder.exe in $stagingDab!"
               exit 1
           }
           Write-Host "Found DAB binary directory: $binDir"
 
-          # Flatten required binaries directly into Desktop/ZeroQuery.Desktop/tools/dab
-          # Copying only files (no subdirectories) avoids language satellite assemblies and win-x64 folder naming that conflict with Windows App SDK MakePri resource indexing
+          # Flatten required binaries directly into Desktop/ZeroQuery.Desktop/tools/dab.
+          # Copying only files (no subdirectories) avoids language satellite assemblies and
+          # win-x64 folder naming that conflict with Windows App SDK MakePri resource indexing.
           $targetDir = "Desktop/ZeroQuery.Desktop/tools/dab"
           New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
           Get-ChildItem -Path $binDir -File | Copy-Item -Destination $targetDir -Force
@@ -80,10 +94,9 @@ jobs:
           # Create dab.exe alias for Microsoft.DataApiBuilder.exe
           Copy-Item (Join-Path $targetDir "Microsoft.DataApiBuilder.exe") (Join-Path $targetDir "dab.exe") -Force
 
-          # Clean up temporary staging directory
-          Remove-Item -Path "staging-dab" -Recurse -Force
+          Remove-Item -Path $stagingDab -Recurse -Force
 
-          # Test that embedded dab.exe runs standalone
+          # Verify the embedded dab.exe runs standalone before it ever reaches packaging.
           $dabExe = Join-Path $targetDir "dab.exe"
           Write-Host "Verifying embedded DAB executable ($dabExe --version):"
           & $dabExe --version
@@ -113,88 +126,28 @@ jobs:
               Write-Host "Keeping existing Version in Package.appxmanifest"
           }
 
-      - name: Build Store-Ready MSIX Package (x64)
+      - name: Build & Collect Store-Ready MSIX Package (x64)
         if: ${{ github.event.inputs.platform == 'x64' || github.event.inputs.platform == 'both' || github.event.inputs.platform == '' }}
         shell: pwsh
-        run: |
-          Write-Host "Publishing x64 Store MSIX package..."
-          $appxDir = Join-Path (Resolve-Path "Desktop/ZeroQuery.Desktop") "AppPackages\"
-          dotnet publish Desktop/ZeroQuery.Desktop/ZeroQuery.Desktop.csproj `
-            -p:Platform=x64 `
-            -c Release `
-            -p:GenerateAppxPackageOnBuild=true `
-            -p:AppxPackageSigningEnabled=false `
-            -p:AppxPackageDir="$appxDir"
-          if ($LASTEXITCODE -ne 0) {
-              Write-Host "::error::dotnet publish (x64) failed with exit code $LASTEXITCODE"
-              exit $LASTEXITCODE
-          }
+        run: ./.github/scripts/Build-StorePackage.ps1 -Platform x64 -PackageRoot $env:PACKAGE_ROOT
 
-      - name: Build Store-Ready MSIX Package (ARM64)
+      - name: Build & Collect Store-Ready MSIX Package (ARM64)
         if: ${{ github.event.inputs.platform == 'arm64' || github.event.inputs.platform == 'both' }}
         shell: pwsh
-        run: |
-          Write-Host "Publishing ARM64 Store MSIX package..."
-          $appxDir = Join-Path (Resolve-Path "Desktop/ZeroQuery.Desktop") "AppPackages\"
-          dotnet publish Desktop/ZeroQuery.Desktop/ZeroQuery.Desktop.csproj `
-            -p:Platform=ARM64 `
-            -c Release `
-            -p:GenerateAppxPackageOnBuild=true `
-            -p:AppxPackageSigningEnabled=false `
-            -p:AppxPackageDir="$appxDir"
-          if ($LASTEXITCODE -ne 0) {
-              Write-Host "::error::dotnet publish (ARM64) failed with exit code $LASTEXITCODE"
-              exit $LASTEXITCODE
-          }
+        run: ./.github/scripts/Build-StorePackage.ps1 -Platform ARM64 -PackageRoot $env:PACKAGE_ROOT
 
-      - name: Prepare .msixupload Packages for Microsoft Partner Center
+      - name: Summarize Generated Store Packages
         shell: pwsh
         run: |
-          $outDir = "Desktop/ZeroQuery.Desktop/AppPackages"
-          Write-Host "Scanning for generated MSIX output..."
-          # The first recursive Get-ChildItem walk after `dotnet publish` has repeatedly returned zero
-          # results on these hosted Windows runners even though the files are on disk (the identical
-          # walk run a second time a moment later finds them every time) - a directory-entry cache
-          # coherency delay, not a pattern/path bug. Retry with a short sleep until files appear.
-          $msixFiles = @()
-          for ($i = 1; $i -le 10; $i++) {
-              $msixFiles = @(Get-ChildItem -Path . -Recurse -Include "*.msix" -ErrorAction SilentlyContinue |
-                  Where-Object { $_.FullName -like "*AppPackages*" -and $_.Name -like "ZeroQuery*" -and $_.FullName -notmatch "Debug" })
-              if ($msixFiles.Count -gt 0) { break }
-              Write-Host "Attempt $i: no .msix files found yet; sleeping 3s and retrying..."
-              Start-Sleep -Seconds 3
-          }
-
-          if ($msixFiles.Count -eq 0) {
-              Write-Host "::error::No .msix files found anywhere under AppPackages"
-              Write-Host "Full repo tree search for any .msix/.msixbundle files:"
-              Get-ChildItem -Path . -Recurse -Include "*.msix","*.msixbundle" -ErrorAction SilentlyContinue | Select-Object FullName, Length | Format-Table -AutoSize
-              exit 1
-          }
-
-          foreach ($file in $msixFiles) {
-              $baseName = [System.IO.Path]::GetFileNameWithoutExtension($file.Name)
-              $uploadZip = Join-Path $file.DirectoryName "$baseName.msixupload"
-              if (-not (Test-Path $uploadZip)) {
-                  Write-Host "Generating .msixupload bundle for $($file.Name)..."
-                  Compress-Archive -Path $file.FullName -DestinationPath $uploadZip -Force
-              }
-          }
-          
-          Write-Host "Generated Store packages in: $outDir"
-          Get-ChildItem -Path . -Recurse -ErrorAction SilentlyContinue |
-              Where-Object { $_.FullName -like "*AppPackages*" -and $_.Extension -match 'msix|msixupload|appxsym' } |
-              Select-Object Name, Length, FullName | Format-Table -AutoSize
+          Write-Host "Final contents of $env:PACKAGE_ROOT :"
+          Get-ChildItem -Path $env:PACKAGE_ROOT -Recurse -File |
+              Select-Object FullName, Length | Format-Table -AutoSize
 
       - name: Upload Store Packages as Build Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: zeroquery-ms-store-packages
-          path: |
-            Desktop/ZeroQuery.Desktop/AppPackages/**/*.msix
-            Desktop/ZeroQuery.Desktop/AppPackages/**/*.msixupload
-            AppPackages/**/*.msix
-            AppPackages/**/*.msixupload
+          path: ${{ env.PACKAGE_ROOT }}\**\*
           if-no-files-found: error
           retention-days: 14
 
@@ -202,11 +155,7 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            Desktop/ZeroQuery.Desktop/AppPackages/**/*.msix
-            Desktop/ZeroQuery.Desktop/AppPackages/**/*.msixupload
-            AppPackages/**/*.msix
-            AppPackages/**/*.msixupload
+          files: ${{ env.PACKAGE_ROOT }}\**\*
           draft: false
           prerelease: false
           generate_release_notes: true

@@ -24,6 +24,18 @@
     <ProjectReference Include="..\..\backend\Zeroquery.Core\Zeroquery.Core.csproj" />
   </ItemGroup>
 
+  <!--
+    Dev-time convenience: automatically build the Next.js static export into wwwroot
+    if it hasn't been built yet (fresh clone). Skipped when wwwroot already has content,
+    so CI (which runs `npm run build:desktop` explicitly) and incremental local builds
+    stay fast. Requires Node.js/npm on PATH.
+  -->
+  <Target Name="EnsureDesktopFrontendBuilt" BeforeTargets="BeforeBuild"
+          Condition="'$(DesignTimeBuild)' != 'true' and !Exists('$(MSBuildProjectDirectory)\wwwroot\index.html')">
+    <Message Importance="high" Text="wwwroot\index.html not found — building frontend via 'npm run build:desktop'..." />
+    <Exec Command="npm run build:desktop" WorkingDirectory="$(MSBuildProjectDirectory)\..\..\frontend" ContinueOnError="WarnAndContinue" />
+  </Target>
+
   <ItemGroup>
     <Content Include="Assets\SplashScreen.scale-200.png" />
     <Content Include="Assets\LockScreenLogo.scale-200.png" />

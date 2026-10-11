@@ -178,15 +178,25 @@ public sealed class DabProcessManager : IDisposable
         if (string.Equals(_options.DabExecutablePath, "dab", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(_options.DabExecutablePath, "dab.exe", StringComparison.OrdinalIgnoreCase))
         {
-            var userToolsPath = Path.Combine(
+            var userToolsDir = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
                 ".dotnet",
-                "tools",
-                OperatingSystem.IsWindows() ? "dab.exe" : "dab");
+                "tools");
 
-            if (File.Exists(userToolsPath))
+            var userToolsExePath = Path.Combine(userToolsDir, OperatingSystem.IsWindows() ? "dab.exe" : "dab");
+            if (File.Exists(userToolsExePath))
             {
-                return userToolsPath;
+                return userToolsExePath;
+            }
+
+            // `dotnet tool install -g` on Windows generates a `dab.cmd` shim instead of a native exe.
+            if (OperatingSystem.IsWindows())
+            {
+                var userToolsCmdPath = Path.Combine(userToolsDir, "dab.cmd");
+                if (File.Exists(userToolsCmdPath))
+                {
+                    return userToolsCmdPath;
+                }
             }
         }
 
@@ -442,12 +452,17 @@ public sealed class DabProcessManager : IDisposable
         try
         {
             var isDll = executable.EndsWith(".dll", StringComparison.OrdinalIgnoreCase);
+            var isCmd = executable.EndsWith(".cmd", StringComparison.OrdinalIgnoreCase) || executable.EndsWith(".bat", StringComparison.OrdinalIgnoreCase);
             using var proc = new Process
             {
                 StartInfo = new ProcessStartInfo
                 {
-                    FileName = isDll ? "dotnet" : executable,
-                    Arguments = isDll ? $"\"{executable}\" --version" : "--version",
+                    FileName = isDll ? "dotnet" : isCmd ? "cmd.exe" : executable,
+                    Arguments = isDll
+                        ? $"\"{executable}\" --version"
+                        : isCmd
+                        ? $"/c \"\"{executable}\" --version\""
+                        : "--version",
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
                     UseShellExecute = false,
