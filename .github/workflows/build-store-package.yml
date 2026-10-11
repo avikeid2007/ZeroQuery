@@ -58,10 +58,30 @@ jobs:
         run: |
           Write-Host "Installing frontend dependencies (npm ci)..."
           cd frontend
-          npm ci
-          if ($LASTEXITCODE -ne 0) {
-              Write-Host "::error::npm ci failed with exit code $LASTEXITCODE"
-              exit $LASTEXITCODE
+
+          # Harden against transient npm registry flakiness (e.g. EIDLETIMEOUT on cold,
+          # uncached hosted runners) by raising network timeouts/retries and retrying the
+          # whole install a few times before failing the job.
+          npm config set fetch-retries 5
+          npm config set fetch-retry-mintimeout 20000
+          npm config set fetch-retry-maxtimeout 120000
+          npm config set fetch-timeout 300000
+
+          $maxAttempts = 3
+          $installed = $false
+          for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+              Write-Host "npm ci attempt $attempt of $maxAttempts..."
+              npm ci
+              if ($LASTEXITCODE -eq 0) {
+                  $installed = $true
+                  break
+              }
+              Write-Host "::warning::npm ci failed on attempt $attempt (exit code $LASTEXITCODE)"
+              Start-Sleep -Seconds (10 * $attempt)
+          }
+          if (-not $installed) {
+              Write-Host "::error::npm ci failed after $maxAttempts attempts"
+              exit 1
           }
 
           Write-Host "Building Next.js static client into Desktop wwwroot (npm run build:desktop)..."
