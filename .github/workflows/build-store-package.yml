@@ -40,10 +40,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup Node.js (v20)
+      - name: Setup Node.js (v24)
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
 
@@ -51,7 +51,7 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
-          include-prerelease: true
+          dotnet-quality: 'preview'
 
       - name: Install Frontend Dependencies & Export Desktop Client
         shell: pwsh
@@ -68,13 +68,30 @@ jobs:
           npm config set fetch-retry-maxtimeout 120000
           npm config set fetch-timeout 600000
           npm config set audit false
+          npm config set fund false
 
-          Write-Host "::notice::Running npm ci --no-optional..."
-          npm ci --no-optional --loglevel warn
-          $exitCode = $LASTEXITCODE
+          $maxAttempts = 5
+          $installed = $false
+          for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+              Write-Host "::notice::Running npm ci (attempt $attempt/$maxAttempts)..."
+              npm ci --no-optional --prefer-offline --loglevel warn
+              $exitCode = $LASTEXITCODE
 
-          if ($exitCode -ne 0) {
-              Write-Host "::error::npm ci failed with exit code $exitCode"
+              if ($exitCode -eq 0) {
+                  $installed = $true
+                  break
+              }
+
+              Write-Host "::warning::npm ci failed on attempt $attempt with exit code $exitCode"
+              if ($attempt -lt $maxAttempts) {
+                  $delay = [Math]::Min(90, 15 * $attempt)
+                  Write-Host "::notice::Retrying in ${delay}s..."
+                  Start-Sleep -Seconds $delay
+              }
+          }
+
+          if (-not $installed) {
+              Write-Host "::error::npm ci failed after $maxAttempts attempts"
               exit 1
           }
 
