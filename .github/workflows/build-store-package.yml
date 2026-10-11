@@ -56,35 +56,29 @@ jobs:
       - name: Install Frontend Dependencies & Export Desktop Client
         shell: pwsh
         run: |
-          Write-Host "Installing frontend dependencies (npm ci)..."
+          Write-Host "::notice::Installing frontend dependencies (npm ci)..."
           cd frontend
 
-          # Harden against transient npm registry flakiness (e.g. EIDLETIMEOUT on cold,
-          # uncached hosted runners) by raising network timeouts/retries and retrying the
-          # whole install a few times before failing the job.
-          npm config set fetch-retries 5
-          npm config set fetch-retry-mintimeout 20000
+          # Configure npm for maximum resilience on GitHub's windows-latest runner.
+          # Windows runners sometimes have higher I/O contention and npm registry
+          # timeouts can exceed the default 30s. These settings add retry buffer.
+          Write-Host "::notice::Configuring npm for resilience..."
+          npm config set fetch-retries 10
+          npm config set fetch-retry-mintimeout 30000
           npm config set fetch-retry-maxtimeout 120000
-          npm config set fetch-timeout 300000
+          npm config set fetch-timeout 600000
+          npm config set audit false
 
-          $maxAttempts = 3
-          $installed = $false
-          for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
-              Write-Host "npm ci attempt $attempt of $maxAttempts..."
-              npm ci
-              if ($LASTEXITCODE -eq 0) {
-                  $installed = $true
-                  break
-              }
-              Write-Host "::warning::npm ci failed on attempt $attempt (exit code $LASTEXITCODE)"
-              Start-Sleep -Seconds (10 * $attempt)
-          }
-          if (-not $installed) {
-              Write-Host "::error::npm ci failed after $maxAttempts attempts"
+          Write-Host "::notice::Running npm ci --no-optional..."
+          npm ci --no-optional --loglevel warn
+          $exitCode = $LASTEXITCODE
+
+          if ($exitCode -ne 0) {
+              Write-Host "::error::npm ci failed with exit code $exitCode"
               exit 1
           }
 
-          Write-Host "Building Next.js static client into Desktop wwwroot (npm run build:desktop)..."
+          Write-Host "::notice::Building Next.js static client into Desktop wwwroot (npm run build:desktop)..."
           npm run build:desktop
           if ($LASTEXITCODE -ne 0) {
               Write-Host "::error::npm run build:desktop failed with exit code $LASTEXITCODE"
@@ -97,7 +91,7 @@ jobs:
               Write-Host "::error::Frontend build did not produce $indexPath"
               exit 1
           }
-          Write-Host "Frontend export verified at $indexPath"
+          Write-Host "::notice::Frontend export verified at $indexPath"
 
       - name: Install & Embed Microsoft Data API Builder (DAB) CLI
         shell: pwsh
