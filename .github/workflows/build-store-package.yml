@@ -74,7 +74,7 @@ jobs:
           $installed = $false
           for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
               Write-Host "::notice::Running npm ci (attempt $attempt/$maxAttempts)..."
-              npm ci --no-optional --prefer-offline --loglevel warn
+              npm ci --prefer-offline --loglevel warn
               $exitCode = $LASTEXITCODE
 
               if ($exitCode -eq 0) {
